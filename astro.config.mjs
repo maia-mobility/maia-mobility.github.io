@@ -71,12 +71,35 @@ export default defineConfig({
       directives: [
         "default-src 'self'",
         "img-src 'self' data:", // 캔버스 스냅샷·SVG 파비콘
-        "font-src 'self'", // 폰트는 전부 자체 호스팅(@fontsource)
+        // 폰트는 전부 자체 호스팅(@fontsource·pretendard)이지만, Vite 가 4KB 미만
+        // 서브셋(키릴 등)을 `data:` URI 로 인라인한다. data: 폰트는 실행되는 것이
+        // 없어 위험이 없다 — 막으면 그 글자만 폴백으로 떨어진다.
+        "font-src 'self' data:",
         "connect-src 'self'", // fetch·XHR·WebSocket 을 쓰지 않는다
         "object-src 'none'", // <object>·<embed> 금지
         "base-uri 'self'", // <base> 주입으로 상대경로를 훔치는 것을 막는다
         "form-action 'none'", // 폼이 없다 — 생기면 그때 연다
       ],
+
+      /*
+       * 인라인 `style=""` **속성**만 따로 연다.
+       *
+       * `style-src` 에 해시가 있으면 CSP 규격상 `'unsafe-inline'` 은 무시되고,
+       * 속성에는 해시를 붙일 자리가 없다 — 그래서 속성이 통째로 막힌다.
+       * 막히면 `--k`(연구 덱의 현재 위치 표시)·초상 비율·히어로 타이핑이
+       * **조용히** 죽는다. 콘솔에도 안 찍혀서 화면을 봐야만 알 수 있다.
+       * (실제로 그렇게 배포됐고, 눈금 넷이 다 켜진 것을 사람이 보고 잡았다.)
+       *
+       * `style-src-attr` 은 속성만 다스리는 별도 지시어라 해시가 없고,
+       * 여기서는 `'unsafe-inline'` 이 그대로 적용된다. `<style>` 요소와
+       * **스크립트는 해시로 잠긴 채** 남는다 — XSS 의 핵심은 그대로 막힌다.
+       *
+       * 이 사이트는 사용자 입력을 받지 않는다(폼·쿼리 반영·댓글 없음).
+       * 속성을 주입할 경로 자체가 없으므로 실질적인 손실이 없다.
+       */
+      styleDirective: {
+        resources: [{ resource: "'unsafe-inline'", kind: 'attribute' }],
+      },
     },
   },
 
