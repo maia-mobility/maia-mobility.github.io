@@ -1,11 +1,18 @@
 /**
  * 히어로 캔버스가 실제로 그려지는지 픽셀로 확인한다.
- *   node scripts/hero-check.mjs [path] [waitMs]
+ *
+ *   node scripts/hero-check.mjs [baseUrl] [waitMs]
+ *   node scripts/hero-check.mjs https://maia-mobility.github.io
+ *
+ * 첫 인자는 **주소**다 — audit.mjs · stage-check.mjs 와 같은 규칙이다.
+ * (예전에는 여기만 경로를 받아서, 배포 주소를 넘겼더니 localhost 뒤에 그대로
+ *  이어 붙어 "Cannot navigate to invalid URL" 로 죽었다.)
  */
 import puppeteer from 'puppeteer-core';
 import { mkdirSync } from 'node:fs';
 
-const PATHS = process.argv[2] ? [process.argv[2]] : ['/', '/ko'];
+const BASE = (process.argv[2] ?? 'http://localhost:4321').replace(/\/+$/, '');
+const PATHS = ['/', '/ko'];
 const WAIT = Number(process.argv[3] ?? 5000);
 const OUT =
   '/private/tmp/claude-501/-Users-dnwls-Desktop-Lab--------------/cf7eb34b-8577-4c97-897a-4ff1edf20d5d/scratchpad/shots';
@@ -24,7 +31,7 @@ for (const path of PATHS) {
   ]) {
     const page = await browser.newPage();
     await page.setViewport({ width: w, height: h, deviceScaleFactor: 1 });
-    await page.goto(`http://localhost:4321${path}`, { waitUntil: 'networkidle0' });
+    await page.goto(`${BASE}${path}`, { waitUntil: 'networkidle0' });
 
     // 스윕이 한 바퀴 돌 시간을 실제로 기다린다
     await new Promise((r) => setTimeout(r, WAIT));
