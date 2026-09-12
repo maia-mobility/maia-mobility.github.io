@@ -1,0 +1,121 @@
+/* HudFrame — 둥근 카드를 대체하는 이 사이트의 유일한 컨테이너.
+   깊이는 ①선택된 변의 헤어라인 ②코너 틱 ③배경 광도 단계로만 만든다.
+   box-shadow 없음 · gradient 없음 · radius는 global.css의 전역 가드가 0으로 고정. */
+
+.frame {
+  /* 로컬 채널 — tone/interactive가 이 두 값만 바꾸면 틱까지 함께 점등된다. */
+  --hud-line: var(--line);
+  --hud-tick: var(--line-hot);
+  --hud-label: var(--fg-mute);
+  /* 라벨이 상단 선을 "끊고" 걸터앉으려면 프레임이 놓인 면의 색을 알아야 한다.
+     다른 면 위에 올릴 때는 style={{ '--hud-surface': 'var(--bg-raise)' }} 로 덮는다. */
+  --hud-surface: var(--bg);
+
+  position: relative;
+  padding: var(--hud-pad, var(--space-3));
+  border-style: solid;
+  border-color: var(--hud-line);
+  border-width: 0;
+  transition: border-color var(--dur-base) var(--ease-out);
+}
+
+/* --- 선택된 변만 1px --- */
+.edgeTop {
+  border-block-start-width: var(--hair);
+}
+
+.edgeRight {
+  border-inline-end-width: var(--hair);
+}
+
+.edgeBottom {
+  border-block-end-width: var(--hair);
+}
+
+.edgeLeft {
+  border-inline-start-width: var(--hair);
+}
+
+/* --- tone --- */
+.hot {
+  --hud-line: var(--accent);
+  --hud-tick: var(--accent);
+  --hud-label: var(--accent);
+}
+
+/* --- hover 시 --line → --accent 점등 --- */
+.interactive {
+  cursor: pointer;
+}
+
+.interactive:hover,
+.interactive:focus-within {
+  --hud-line: var(--accent);
+  --hud-tick: var(--accent);
+  --hud-label: var(--accent);
+}
+
+/* --- 코너 틱: 6px L자. gradient 없이 span 하나당 border 두 변으로 그린다. --- */
+.tick {
+  position: absolute;
+  inline-size: var(--tick);
+  block-size: var(--tick);
+  border: 0 solid var(--hud-tick);
+  pointer-events: none;
+  transition: border-color var(--dur-base) var(--ease-out);
+}
+
+.tickTl {
+  inset-block-start: 0;
+  inset-inline-start: 0;
+  border-block-start-width: var(--hair);
+  border-inline-start-width: var(--hair);
+}
+
+.tickTr {
+  inset-block-start: 0;
+  inset-inline-end: 0;
+  border-block-start-width: var(--hair);
+  border-inline-end-width: var(--hair);
+}
+
+.tickBl {
+  inset-block-end: 0;
+  inset-inline-start: 0;
+  border-block-end-width: var(--hair);
+  border-inline-start-width: var(--hair);
+}
+
+.tickBr {
+  inset-block-end: 0;
+  inset-inline-end: 0;
+  border-block-end-width: var(--hair);
+  border-inline-end-width: var(--hair);
+}
+
+/* --- 상단 선에 걸터앉는 모노 캡션 --- */
+.label {
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline-start: var(--space-2);
+  transform: translateY(-50%);
+  max-inline-size: calc(100% - var(--space-6));
+  padding-inline: var(--space-1);
+  background-color: var(--hud-surface);
+  color: var(--hud-label);
+  font-family: var(--font-mono);
+  font-size: var(--t-mono-sm);
+  line-height: var(--lh-mono);
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: color var(--dur-base) var(--ease-out);
+}
+
+/* 라벨이 있으면 첫 줄이 캡션과 붙지 않도록 상단 패딩을 한 스텝 올린다. */
+.hasLabel {
+  padding-block-start: var(--space-4);
+}

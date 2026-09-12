@@ -1,0 +1,94 @@
+/* SectionHead — `// 02 — RESEARCH` 형태의 모노 섹션 헤더.
+   번호·라벨은 JetBrains Mono 대문자 트래킹, 제목은 본문 서체의 가는 압축 헤딩.
+   헤딩 line-height를 1.0–1.15로 조이고 대신 주변 여백을 크게 준다. */
+
+.head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+/* 라벨 행 — 좌: `// 02 — RESEARCH`, 우: 카운터 슬롯 */
+.row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.eyebrow,
+.meta {
+  font-family: var(--font-mono);
+  font-size: var(--t-mono-sm);
+  font-weight: var(--w-mono);
+  line-height: var(--lh-mono);
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+  font-variant-numeric: tabular-nums;
+  color: var(--fg-mute);
+  margin: 0;
+}
+
+.eyebrow {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6em;
+  min-inline-size: 0;
+}
+
+/* 슬래시는 주석 기호 — 액센트로 "이 줄은 계측 라인" 이라고 알린다. */
+.slash {
+  color: var(--accent);
+}
+
+.index {
+  color: var(--fg);
+}
+
+.dash {
+  color: var(--line-hot);
+}
+
+.labelText {
+  color: var(--fg-mute);
+  overflow-wrap: anywhere;
+}
+
+.meta {
+  color: var(--fg-dim);
+  white-space: nowrap;
+  margin-inline-start: auto;
+}
+
+/* 제목 — 압축 헤딩 */
+.title {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-weight: var(--w-head);
+  font-size: var(--t-h2);
+  line-height: var(--lh-1);
+  letter-spacing: var(--track-heading);
+  color: var(--fg);
+  text-wrap: balance;
+  max-inline-size: 22ch;
+}
+
+.sub {
+  margin: 0;
+  max-inline-size: var(--measure);
+  font-size: var(--t-lg);
+  line-height: 1.45;
+  color: var(--fg-mute);
+  text-wrap: pretty;
+}
+
+/* 하드 룰 6 — 구분선은 실선이 아니라 점선 스캔 라인 */
+.rule {
+  display: block;
+  inline-size: 100%;
+  block-size: 0;
+  border: none;
+  border-block-start: var(--hair) dotted var(--scan);
+  margin-block-start: var(--space-1);
+}

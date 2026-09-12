@@ -1,0 +1,116 @@
+---
+import Button from '../components/Button';
+import { href, pick, type Lang } from '../i18n';
+import { NAV, UI } from '../i18n/ui';
+
+interface Props { lang: Lang }
+const { lang } = Astro.props;
+---
+
+<section class="container wrap" data-quiet>
+  <p class="code" aria-hidden="true">404</p>
+
+  <h1 class="title" lang={lang}>{pick(UI.notFoundTitle, lang)}</h1>
+
+  <p class="body" lang={lang}>{pick(UI.notFoundBody, lang)}</p>
+
+  {/* 되돌아갈 곳 — 막다른 길로 두지 않는다 */}
+  <nav class="links" aria-label={pick(UI.menu, lang)}>
+    <ul class="list">
+      {NAV.map((item) => (
+        <li>
+          <a class="link" href={href(item.key, lang)}>
+            <span class="idx" aria-hidden="true">{item.index}</span>
+            {pick(item.label, lang)}
+          </a>
+        </li>
+      ))}
+    </ul>
+  </nav>
+
+  <Button href={href('', lang)}>{pick(UI.backHome, lang)}</Button>
+</section>
+
+<style>
+  .wrap {
+    display: grid;
+    gap: var(--space-3);
+    justify-items: start;
+    padding-block: var(--space-9) var(--section-y);
+    min-height: 60svh;
+    align-content: center;
+  }
+
+  /* 반사되어 돌아오지 않은 신호 — 숫자를 계측값처럼 취급한다 */
+  .code {
+    font-family: var(--font-mono);
+    font-size: var(--t-micro);
+    letter-spacing: var(--track-label);
+    color: var(--i-6);
+    border: var(--hair) solid var(--i-6);
+    padding: 3px var(--space-1);
+    margin: 0;
+  }
+
+  .title {
+    font-family: var(--font-sans);
+    font-size: var(--t-h1);
+    font-weight: var(--w-light);
+    line-height: var(--lh-0);
+    letter-spacing: var(--track-display);
+    color: var(--fg);
+    margin: 0;
+    text-wrap: balance;
+  }
+
+  .body {
+    max-width: var(--measure);
+    font-size: var(--t-base);
+    line-height: var(--lh-body);
+    color: var(--fg-mute);
+    margin: 0;
+    text-wrap: pretty;
+  }
+
+  .links {
+    width: 100%;
+    margin-top: var(--space-3);
+    padding-top: var(--space-3);
+    border-top: var(--hair) dotted var(--scan);
+  }
+
+  .list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-1) var(--space-4);
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .link {
+    display: inline-flex;
+    align-items: baseline;
+    gap: var(--space-1);
+    min-height: var(--tap-min);
+    text-decoration: none;
+    font-family: var(--font-mono);
+    font-size: var(--t-mono-sm);
+    letter-spacing: var(--track-mono);
+    color: var(--fg-mute);
+    transition: color var(--dur-fast) var(--ease-out);
+  }
+
+  .link:hover {
+    color: var(--accent);
+  }
+
+  .idx {
+    font-size: var(--t-micro);
+    color: var(--fg-dim);
+  }
+
+  .link:hover .idx {
+    color: var(--accent);
+  }
+</style>

@@ -1,0 +1,26 @@
+---
+import SectionHead from '../components/SectionHead';
+import NewsTimeline from '../components/NewsTimeline';
+import { NEWS } from '../data/news';
+import { pick, type Lang } from '../i18n';
+import { UI } from '../i18n/ui';
+
+interface Props { lang: Lang }
+const { lang } = Astro.props;
+---
+
+<section class="container section" data-quiet>
+  <SectionHead
+    as="h1"
+    index="05"
+    label="NEWS"
+    title={pick(UI.sectionNews, lang)}
+    lang={lang}
+    meta={`${String(NEWS.length).padStart(2, '0')} ENTRIES`}
+  />
+  <NewsTimeline items={NEWS} lang={lang} />
+</section>
+
+<style>
+  .section { display: grid; gap: var(--space-5); padding-block: var(--space-7) var(--section-y); }
+</style>

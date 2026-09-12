@@ -1,0 +1,64 @@
+---
+import Base from './Base.astro';
+import Nav from '../components/Nav';
+import Footer from '../components/Footer';
+import ScrollReveal from '../components/ScrollReveal.astro';
+import type { Lang } from '../i18n';
+
+interface Props {
+  lang: Lang;
+  page: string;
+  transparentHeader?: boolean;
+}
+
+const { lang, page, transparentHeader = false } = Astro.props;
+const pathname = Astro.url.pathname;
+---
+
+<Base lang={lang} page={page} transparentHeader={transparentHeader}>
+  {/* Nav·Footer 모두 정적이다 — client: 지시어를 붙이지 마라 (React 런타임 213KB) */}
+  <Nav slot="header" lang={lang} pathname={pathname} />
+  <slot />
+  <Footer slot="footer" lang={lang} />
+</Base>
+
+<ScrollReveal />
+
+{/*
+  모바일 메뉴 토글. React 없이 처리한다.
+  JS 가 꺼져 있으면 메뉴가 열리지 않지만, 푸터에 동일한 내비게이션이 있어 모든 페이지에 도달할 수 있다.
+*/}
+<script>
+  const btn = document.querySelector<HTMLButtonElement>('[data-nav-toggle]');
+  const panel = document.querySelector<HTMLElement>('[data-nav-panel]');
+  const glyph = document.querySelector<HTMLElement>('[data-nav-glyph]');
+  const label = document.querySelector<HTMLElement>('[data-nav-label]');
+
+  if (btn && panel) {
+    const setOpen = (open: boolean) => {
+      panel.hidden = !open;
+      btn.setAttribute('aria-expanded', String(open));
+      document.body.style.overflow = open ? 'hidden' : '';
+      if (glyph) glyph.textContent = open ? '✕' : '▤';
+      if (label) {
+        label.textContent = open
+          ? (btn.dataset.labelClose ?? 'Close')
+          : (btn.dataset.labelOpen ?? 'Menu');
+      }
+    };
+
+    btn.addEventListener('click', () => setOpen(panel.hidden));
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && !panel.hidden) {
+        setOpen(false);
+        btn.focus();
+      }
+    });
+
+    // 링크를 누르면 이동 전에 닫는다 (같은 페이지 앵커일 때 패널이 남지 않도록)
+    panel.addEventListener('click', (e) => {
+      if ((e.target as HTMLElement).closest('a')) setOpen(false);
+    });
+  }
+</script>

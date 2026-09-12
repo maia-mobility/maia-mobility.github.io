@@ -1,0 +1,172 @@
+---
+/**
+ * 스크롤 등장 연출을 페이지 전체에 건다. Page.astro 에서 한 번만 쓴다.
+ *
+ * 속성 두 개를 쓴다 — 상태와 변형을 한 속성에 담으면 등장하는 순간
+ * 변형(`head`)이 사라져서 지속시간이 바뀌어 버린다.
+ *   data-reveal        : 상태 ('' → 'in')
+ *   data-reveal-kind   : 변형 ('head' 등, 상태와 무관하게 유지)
+ *
+ * 경로가 **둘**이다.
+ *   ① 스크롤 구동 (`animation-timeline: view()`) — 지원 브라우저의 기본 경로.
+ *      들어올 때 페이드인, 화면 최상단으로 빠질 때 페이드아웃이 스크롤 위치에
+ *      직접 물린다. 되감으면 그대로 복귀한다. JS 0KB, 컴포지터에서 돈다.
+ *   ② IntersectionObserver — 미지원 브라우저 폴백. 한 번 나타나면 끝(기존 동작).
+ * `mountReveal` 이 ①을 지원하는 브라우저에서는 아무것도 하지 않고 빠져나가므로
+ * 두 경로가 겹치는 일은 없다 (src/lib/reveal.ts).
+ *
+ * 스타일을 global.css 가 아니라 여기에 두는 이유: 이 연출은 하나의 기능이라
+ * 마크업·스크립트·스타일이 한 파일에 모여 있는 편이 고치기 쉽다.
+ */
+---
+
+<style is:global>
+  /*
+   * 기본은 "보임". JS 가 살아 있을 때만 <html data-reveal-armed> 가 붙고,
+   * 그때부터 아직 등장하지 않은 요소를 숨긴다.
+   * → JS 가 꺼져 있으면 아무것도 사라지지 않는다.
+   */
+  [data-reveal] {
+    transition:
+      opacity 620ms var(--ease-out),
+      transform 620ms var(--ease-out);
+  }
+
+  :root[data-reveal-armed] [data-reveal]:not([data-reveal='in']) {
+    opacity: 0;
+    transform: translate3d(0, 14px, 0);
+    will-change: opacity, transform;
+  }
+
+  /* 큰 제목은 조금 더 멀리서, 더 느리게 올라온다 — 무게감이 다르다 */
+  [data-reveal-kind='head'] {
+    transition-duration: 780ms;
+  }
+
+  :root[data-reveal-armed] [data-reveal-kind='head']:not([data-reveal='in']) {
+    transform: translate3d(0, 24px, 0);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    :root[data-reveal-armed] [data-reveal]:not([data-reveal='in']) {
+      opacity: 1;
+      transform: none;
+      will-change: auto;
+    }
+
+    [data-reveal] {
+      transition: none;
+    }
+  }
+
+  /*
+   * ── 스크롤 구동 경로 ──────────────────────────────────────────────────
+   * 요소의 뷰 진행도가 곧 타임라인이다. 시간이 아니라 스크롤이 재생 헤드라서
+   * 올라갈 때 되감기가 공짜로 따라온다 — "한 번 나타나면 끝"이 아니다.
+   *
+   * 애니메이션을 둘로 나누고 **fill-mode 를 다르게** 준 것이 핵심이다.
+   *   enter: both     — 진입 전에는 숨기고(backwards), 끝난 뒤에는 보인 채 유지
+   *   exit:  forwards — 활성 구간 **전에는 아무 값도 내지 않는다**
+   * exit 에 both 를 주면 목록의 뒤쪽(나중 선언)이 이겨서 진입 페이드가
+   * 통째로 무시된다. forwards 라야 두 구간이 서로 간섭하지 않는다.
+   *
+   * 구간:
+   *   진입 — `entry 0% → entry 20vh`. **길이**로 잡는다. 백분율로 잡으면 구간
+   *          길이가 요소 높이라서, 60px 짜리 목록 줄은 60px 스크롤 만에 튀어
+   *          오르고 900px 짜리 연구 항목은 900px 동안 흐물거린다.
+   *   퇴장 — `exit 0% → exit 100%`, 그리고 앞 40% 는 붙잡아 둔다. 요소의 윗변이
+   *          화면 최상단을 넘어간 뒤에야 떨어지기 시작한다는 뜻이다. 읽고 있는
+   *          글이 흐려지면 화가 난다. 바닥값 .32 — 0 까지 떨어뜨리지 않는다.
+   *
+   * 드리프트는 opacity 와 같은 타임라인에 물린 세로 이동 16px 뿐이다. 배경 도로가
+   * 흐르는 쪽으로 글자가 아주 조금 앞서 흐른다. transform 만 건드리므로
+   * 레이아웃을 유발하지 않는다.
+   */
+  @supports (animation-timeline: view()) {
+    [data-reveal] {
+      /* JS 경로의 전이는 끈다 — 이 경로에서는 스크롤이 유일한 재생 헤드다. */
+      transition: none;
+      animation:
+        reveal-enter linear both,
+        reveal-exit linear forwards;
+      animation-timeline: view(), view();
+      animation-range:
+        entry 0% entry 20vh,
+        exit 0% exit 100%;
+    }
+
+    /* 큰 제목은 조금 더 멀리서 온다 — 무게감이 다르다 */
+    [data-reveal-kind='head'] {
+      animation-name: reveal-enter-head, reveal-exit;
+      animation-range:
+        entry 0% entry 26vh,
+        exit 0% exit 100%;
+    }
+
+    @keyframes reveal-enter {
+      from {
+        opacity: 0;
+        transform: translate3d(0, 16px, 0);
+      }
+      to {
+        opacity: 1;
+        transform: translate3d(0, 0, 0);
+      }
+    }
+
+    @keyframes reveal-enter-head {
+      from {
+        opacity: 0;
+        transform: translate3d(0, 26px, 0);
+      }
+      to {
+        opacity: 1;
+        transform: translate3d(0, 0, 0);
+      }
+    }
+
+    @keyframes reveal-exit {
+      0%,
+      40% {
+        opacity: 1;
+        transform: translate3d(0, 0, 0);
+      }
+      100% {
+        opacity: 0.32;
+        transform: translate3d(0, -14px, 0);
+      }
+    }
+
+    /*
+     * 동작 줄이기: 전부 끈다. global.css §8 의 `animation-duration: .01ms`
+     * 가드는 스크롤 구동 애니메이션을 멈추지 못한다(재생 헤드가 시간이 아니다).
+     * 여기서 이름을 none 으로 지워야 실제로 멈춘다.
+     */
+    @media (prefers-reduced-motion: reduce) {
+      [data-reveal],
+      [data-reveal-kind='head'] {
+        animation: none;
+        opacity: 1;
+        transform: none;
+      }
+    }
+
+    /*
+     * 인쇄에는 스크롤이 없다 — 재생 헤드가 없으니 진입 전 상태(opacity 0)가 그대로
+     * 종이에 찍힌다. JS 경로에서는 이런 일이 없었다. 인쇄에서는 연출을 통째로 끈다.
+     */
+    @media print {
+      [data-reveal],
+      [data-reveal-kind='head'] {
+        animation: none;
+        opacity: 1;
+        transform: none;
+      }
+    }
+  }
+</style>
+
+<script>
+  import { mountReveal } from '../lib/reveal';
+  mountReveal();
+</script>

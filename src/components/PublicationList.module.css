@@ -1,0 +1,118 @@
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-top: var(--hair) solid var(--line);
+}
+
+/*
+  행 자체가 컨테이너다 — 둥근 카드가 아니라 헤어라인으로 구획된 로그 행.
+  hover 시 좌측에 시안 1px 이 켜지고 텍스트가 밝아진다.
+*/
+.row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: var(--space-3);
+  align-items: baseline;
+  padding: var(--space-3) var(--space-2);
+  border-bottom: var(--hair) solid var(--line);
+  border-left: 2px solid transparent;
+  transition:
+    border-left-color var(--dur-fast) var(--ease-out),
+    background-color var(--dur-fast) var(--ease-out);
+}
+
+.row:hover {
+  border-left-color: var(--accent);
+  background-color: var(--bg-raise);
+}
+
+/* ── 연도 레일 ─────────────────────────────────────── */
+
+.year,
+.yearRepeat {
+  font-family: var(--font-mono);
+  font-size: var(--t-mono-sm);
+  letter-spacing: var(--track-mono);
+  font-variant-numeric: tabular-nums;
+  min-width: 4ch;
+}
+
+.year {
+  color: var(--warn);
+}
+
+.yearRepeat {
+  color: var(--line-hot);
+}
+
+/* ── 본문 ─────────────────────────────────────────── */
+
+.body {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.title {
+  font-family: var(--font-sans);
+  font-size: var(--t-base);
+  font-weight: var(--w-regular);
+  line-height: var(--lh-2);
+  letter-spacing: var(--track-body);
+  color: var(--fg);
+  text-wrap: pretty;
+}
+
+.authors {
+  font-size: var(--t-sm);
+  color: var(--fg-mute);
+  line-height: var(--lh-body);
+}
+
+/* 연구실 저자는 밝게 — 목록에서 눈으로 바로 찾게 한다 */
+.authorLab {
+  color: var(--fg);
+}
+
+.comma {
+  color: var(--fg-dim);
+}
+
+.venue {
+  font-family: var(--font-mono);
+  font-size: var(--t-micro);
+  letter-spacing: var(--track-mono);
+  color: var(--fg-dim);
+  text-wrap: pretty;
+}
+
+.row:hover .venue {
+  color: var(--fg-mute);
+}
+
+/* ── 우측 일련번호 ─────────────────────────────────── */
+
+.index {
+  font-family: var(--font-mono);
+  font-size: var(--t-micro);
+  font-variant-numeric: tabular-nums;
+  color: var(--line-hot);
+  align-self: start;
+}
+
+.row:hover .index {
+  color: var(--accent);
+}
+
+@media (max-width: 34rem) {
+  .row {
+    grid-template-columns: auto 1fr;
+    gap: var(--space-2);
+    padding-inline: var(--space-1);
+  }
+
+  .index {
+    display: none;
+  }
+}

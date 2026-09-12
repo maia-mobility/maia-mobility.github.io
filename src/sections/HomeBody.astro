@@ -1,0 +1,483 @@
+---
+import SectionHead from '../components/SectionHead';
+import HudFrame from '../components/HudFrame';
+import Button from '../components/Button';
+import NewsTimeline from '../components/NewsTimeline';
+import TrafficSim from '../components/TrafficSim';
+import { RESEARCH } from '../data/research';
+import { NEWS } from '../data/news';
+import { SITE } from '../data/site';
+import { href, pick, type Lang } from '../i18n';
+import { UI } from '../i18n/ui';
+
+interface Props { lang: Lang }
+const { lang } = Astro.props;
+const c = SITE.contact;
+---
+
+{/* ── 미션 ─────────────────────────────────────── */}
+<section class="container block" data-quiet>
+  <SectionHead
+    index="00"
+    label="MISSION"
+    title={pick(SITE.tagline, lang)}
+    lang={lang}
+    as="h2"
+  />
+  <p class="mission" lang={lang} data-reveal="">{pick(SITE.mission, lang)}</p>
+</section>
+
+{/* ── 연구 분야 — 옆으로 넘기는 덱 ───────────────────────────────
+    한 분야가 한 화면을 쓰고, 그 안에서 그 분야의 실제 IDM 시뮬레이션이 돌아간다.
+    설명문 대신 **돌아가는 모델**이 분야를 말한다(교수님 결정).
+
+    패널에는 딱 네 가지만 둔다: 번호 / 이름 / 키워드 한 줄 / 시뮬레이션.
+    한때 여기에 배경 도로의 계측판까지 얹었는데, 옆의 시뮬과 같은 이름의 값이
+    다른 수를 가리켜 읽는 사람이 둘을 맞춰 보려 했다. 계측은 시뮬 한 곳에서만 한다.
+
+    넘김은 네이티브 가로 스크롤 + scroll-snap 이다 — 캐러셀 JS 가 없다.
+    ◂▸ 와 눈금은 그냥 `#id` 앵커라 스크립트가 죽어도 눌러서 이동한다. 넘길 수
+    있다는 것을 알리는 장치는 이 둘뿐이다(안내 문장을 대신한다).
+
+    `data-road-stage`·`data-act` 계약은 그대로다 — 배경 도로가 이 덱을 읽어
+    지금 선 패널에 맞춰 카메라를 옮기고 그 주제를 도로 위에서 연기한다. */}
+<section class="stage" data-road-stage aria-labelledby="research-head">
+  <div class="container stageHead" data-quiet>
+    <SectionHead
+      id="research-head"
+      index="01"
+      label="RESEARCH"
+      title={pick(UI.sectionResearch, lang)}
+      lang={lang}
+      as="h2"
+      meta={`${String(RESEARCH.length).padStart(2, '0')} AREAS`}
+    />
+  </div>
+
+  {/* 세로 여유 상자. 덱이 여기 붙어 있는 동안 배경 도로의 시점이 올라간다. */}
+  <div class="deckRoom" data-deck-room>
+    <div class="deck">
+      <div
+        class="track"
+        data-deck
+        tabindex="0"
+        role="group"
+        aria-label={pick(UI.sectionResearch, lang)}
+      >
+        {RESEARCH.map((area, i) => {
+          const prev = RESEARCH[i - 1];
+          const next = RESEARCH[i + 1];
+          return (
+            <article
+              class="panel"
+              id={`area-${area.id}`}
+              data-act={i}
+              style={`--k: var(--a${i}, 1)`}
+              aria-label={pick(area.title, lang)}
+            >
+              <div class="panelInner">
+                <div class="panelHead" data-quiet>
+                  <div class="panelId">
+                    <h3 class="actTitle" lang={lang}>
+                      <a href={`${href('research', lang)}#${area.id}`}>{pick(area.title, lang)}</a>
+                    </h3>
+                    <p class="keys">{area.keywords.join(' · ')}</p>
+                  </div>
+
+                  {/* 번호와 ◂▸ 를 한 덩어리로 둔다 — 이 셋이 모여야 "넷 중 하나를
+                      넘겨 보는 중"으로 읽힌다. 따로 떼어 놓으면 번호는 그냥 장식이다.
+                      끝에서는 링크가 아니라 꺼진 표시로 남는다. */}
+                  <div class="step">
+                    <p class="count" aria-hidden="true">
+                      {area.index}<span class="countOf"> / {String(RESEARCH.length).padStart(2, '0')}</span>
+                    </p>
+                    {prev ? (
+                      <a class="stepBtn" href={`#area-${prev.id}`} aria-label={pick(UI.prevArea, lang)}>◂</a>
+                    ) : (
+                      <span class="stepBtn" aria-hidden="true" data-off>◂</span>
+                    )}
+                    {next ? (
+                      <a class="stepBtn" href={`#area-${next.id}`} aria-label={pick(UI.nextArea, lang)}>▸</a>
+                    ) : (
+                      <span class="stepBtn" aria-hidden="true" data-off>▸</span>
+                    )}
+                  </div>
+                </div>
+
+                {/* 그 분야의 실제 시뮬레이션. 화면 안에 들어올 때만 하이드레이트되고,
+                    옆으로 밀려나면 훅이 rAF 를 멈춘다 — 한 번에 한 대만 돈다. */}
+                <TrafficSim client:visible scenario={area.scenario} lang={lang} compact />
+              </div>
+            </article>
+          );
+        })}
+      </div>
+
+      {/* 위치 눈금. 지금 선 자리는 배경 도로와 같은 값(`--k`)이 정한다. */}
+      <div class="container deckBar" data-quiet>
+        <ol class="ticks">
+          {RESEARCH.map((area, i) => (
+            <li class="tickItem" style={`--k: var(--a${i}, 1)`}>
+              <a class="tick" href={`#area-${area.id}`}>
+                <span class="visually-hidden">{pick(area.title, lang)}</span>
+              </a>
+            </li>
+          ))}
+        </ol>
+      </div>
+    </div>
+  </div>
+
+  <div class="container stageFoot" data-quiet>
+    <Button href={href('research', lang)}>{pick(UI.viewAll, lang)}</Button>
+  </div>
+</section>
+
+{/* ── 최근 소식 ─────────────────────────────────── */}
+<section class="container block" data-quiet>
+  <SectionHead
+    index="05"
+    label="NEWS"
+    title={pick(UI.sectionNews, lang)}
+    lang={lang}
+    as="h2"
+    meta={`${String(NEWS.length).padStart(2, '0')} ENTRIES`}
+  />
+  <NewsTimeline items={NEWS} lang={lang} limit={3} />
+  {NEWS.length > 3 && <Button href={href('news', lang)}>{pick(UI.viewAll, lang)}</Button>}
+</section>
+
+{/* ── 함께하기 ─────────────────────────────────── */}
+<section class="container block" data-quiet>
+  <SectionHead
+    index="06"
+    label="JOIN US"
+    title={pick(UI.sectionJoin, lang)}
+    lang={lang}
+    as="h2"
+  />
+
+  <HudFrame edges={['top', 'left']} ticks label="RECRUITING" class="join">
+    <p class="joinText" lang={lang}>{pick(SITE.recruiting, lang)}</p>
+    <dl class="contact">
+      <div class="pair">
+        <dt>EMAIL</dt>
+        <dd><a class="cLink" href={`mailto:${c.email}`}>{c.email}</a></dd>
+      </div>
+      <div class="pair">
+        <dt>OFFICE</dt>
+        <dd><a class="cLink" href={`tel:${c.office.replace(/-/g, '')}`}>{c.office}</a></dd>
+      </div>
+      <div class="pair">
+        <dt>ROOM</dt>
+        <dd lang={lang}>{pick(c.room, lang)}</dd>
+      </div>
+    </dl>
+    <Button href={`mailto:${c.email}`}>{pick(UI.emailUs, lang)}</Button>
+  </HudFrame>
+</section>
+
+<style>
+  .block {
+    display: grid;
+    gap: var(--space-4);
+    justify-items: start;
+    padding-block: var(--section-y) 0;
+  }
+
+  .mission {
+    max-width: var(--measure);
+    font-size: var(--t-lg);
+    font-weight: var(--w-light);
+    line-height: var(--lh-body);
+    color: var(--fg-mute);
+    margin: 0;
+    text-wrap: pretty;
+  }
+
+  /* ── 연구 무대 — 옆으로 넘기는 덱 ───────────────────────────────
+     덱은 세로 여유 상자(`.deckRoom`) 안에 sticky 로 붙어 있다 — 그 상자가 화면을
+     지나는 동안 배경 도로의 시점이 오르고, 지나가면 다시 내려온다. */
+
+  .stage {
+    display: grid;
+    gap: 0;
+    padding-block: var(--section-y) 0;
+  }
+
+  .stageHead { display: grid; gap: var(--space-3); justify-items: start; }
+
+  /* 덱이 화면에 붙어 있는 길이 = 이 높이 − 덱 높이. 여기를 고치면 "연구 앞에서
+     얼마나 머무는가"와 배경 시점이 오르내리는 구간이 함께 바뀐다. */
+  .deckRoom {
+    min-block-size: 150vh;
+    min-block-size: 150svh;
+    margin-block-start: var(--space-5);
+  }
+
+  .deck {
+    position: sticky;
+    /* 눈금·◂▸ 앵커를 누르면 브라우저는 대상 패널의 **윗변**을 html 의
+       `scroll-padding-block-start`(--space-8) 선에 맞추려 한다. 덱이 붙는 높이에
+       트랙 패딩을 더한 값이 정확히 그 선이어야 세로로 안 튄다 — 어긋난 만큼
+       누를 때마다 페이지가 밀린다(16px 씩 밀리는 것을 실측했다).
+       sticky 내비(≈58px)보다는 아래여야 한다. */
+    inset-block-start: calc(var(--space-8) - var(--space-2));
+    display: grid;
+    gap: var(--space-3);
+  }
+
+  /* 가로 스크롤 + 스냅. 캐러셀 JS 없음.
+     `overscroll-behavior` 를 건드리지 않는다 — `contain` 으로 막으면 트랙 끝에서
+     스크롤이 페이지로 넘어가지 못해 커서가 덱 위에 있는 동안 갇힌다. */
+  .track {
+    display: flex;
+    align-items: stretch;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scroll-snap-type: x mandatory;
+    scroll-behavior: smooth;
+    scrollbar-width: none;
+    /* `overflow-y: hidden` 은 트랙 **패딩 상자**에서 자른다. 여유를 두지 않으면
+       HudFrame 의 모서리 틱과 라벨이 위아래로 반씩 잘린다(실제로 잘렸다). */
+    padding-block: var(--space-2);
+  }
+
+  .track::-webkit-scrollbar { display: none; }
+
+  /* 트랙 자체가 포커스를 받는다 — 키보드로 좌우 키를 눌러 넘길 수 있다. */
+  .track:focus-visible {
+    outline: var(--hair) solid var(--focus);
+    outline-offset: 2px;
+  }
+
+  .panel {
+    flex: 0 0 100%;
+    min-inline-size: 0;
+    scroll-snap-align: start;
+    /* 무대에 서지 않은 패널은 물러난다. JS 가 없으면 `--k` 폴백 1 — 전부 또렷하다. */
+    opacity: calc(0.3 + var(--k, 1) * 0.7);
+    transition: opacity 160ms linear;
+  }
+
+  /* `.container` 와 같은 폭·여백 — 덱만 화면 끝까지 열리고 글은 같은 기둥에 선다. */
+  .panelInner {
+    inline-size: 100%;
+    max-inline-size: calc(var(--container-max) + var(--gutter) * 2);
+    margin-inline: auto;
+    padding-inline: var(--gutter);
+    display: grid;
+    gap: var(--space-3);
+  }
+
+  .panelHead {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: var(--space-4);
+  }
+
+  .panelId { display: grid; gap: var(--space-1); min-inline-size: 0; }
+
+  .count {
+    margin: 0;
+    font-family: var(--font-mono);
+    font-size: var(--t-mono-sm);
+    letter-spacing: var(--track-label);
+    color: var(--fg);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  .countOf { color: var(--line-hot); }
+
+  .actTitle {
+    margin: 0;
+    font-family: var(--font-sans);
+    font-size: var(--t-h3);
+    font-weight: var(--w-light);
+    line-height: var(--lh-2);
+    letter-spacing: var(--track-heading);
+    color: var(--fg);
+    text-wrap: balance;
+  }
+
+  .actTitle a {
+    color: inherit;
+    text-decoration: none;
+    border-bottom: var(--hair) solid transparent;
+    transition: border-color var(--dur-fast) var(--ease-out);
+  }
+
+  .actTitle a:hover { border-bottom-color: var(--accent); }
+
+  /* 키워드는 한 줄이다 — 칩을 네 개 흩뿌리면 줄바꿈이 제멋대로라 정돈이 안 된다. */
+  .keys {
+    margin: 0;
+    font-family: var(--font-mono);
+    font-size: var(--t-micro);
+    letter-spacing: var(--track-mono);
+    text-transform: uppercase;
+    color: var(--fg-mute);
+  }
+
+  /* ── 넘김 ────────────────────────────────────────────────────────
+     이 사이트의 버튼 어휘(각진 1px · hover 시 배경이 아니라 테두리가 점등)를 따른다. */
+  .step {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+    flex: none;
+  }
+
+  /* 번호는 ◂▸ 보다 한 칸 떨어뜨린다 — 셋이 붙으면 번호도 버튼처럼 보인다. */
+  .count + .stepBtn { margin-inline-start: var(--space-2); }
+
+  .stepBtn {
+    display: grid;
+    place-items: center;
+    inline-size: var(--tap-min);
+    block-size: var(--tap-min);
+    border: var(--hair) solid var(--line);
+    color: var(--fg-mute);
+    font-size: var(--t-sm);
+    line-height: 1;
+    text-decoration: none;
+    transition:
+      border-color var(--dur-fast) var(--ease-out),
+      color var(--dur-fast) var(--ease-out);
+  }
+
+  a.stepBtn:hover,
+  a.stepBtn:focus-visible {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  /* 끝에 닿으면 링크가 아니라 꺼진 표시다 — 눌러도 아무 일 없는 링크를 두지 않는다. */
+  .stepBtn[data-off] { color: var(--line); }
+
+  /* ── 위치 눈금 ───────────────────────────────────────────────────
+     점(dot)이 아니라 계측 눈금이다(하드 룰 1·7). 지금 선 자리만 차오른다. */
+  .ticks {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: var(--space-2);
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .tick {
+    position: relative;
+    display: block;
+    block-size: 2px;
+    background-color: var(--line);
+  }
+
+  .tick::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-color: var(--accent);
+    transform: scaleX(var(--k, 1));
+    transform-origin: left center;
+  }
+
+  /* 2px 짜리 선은 손가락으로 못 누른다 — 위아래로 보이지 않는 여유를 준다. */
+  .tick::before {
+    content: '';
+    position: absolute;
+    inset-block: calc(var(--space-2) * -1);
+    inset-inline: 0;
+  }
+
+  .stageFoot { display: grid; justify-items: start; padding-block: var(--space-6) 0; }
+
+  /* 동작 줄이기: 패널을 흐리지 않고, 넘김도 즉시 이동한다. */
+  @media (prefers-reduced-motion: reduce) {
+    .panel { opacity: 1; transition: none; }
+    .track { scroll-behavior: auto; }
+  }
+
+  /* ── 함께하기 ─────────────────────────────────── */
+
+  .join {
+    width: 100%;
+    padding: var(--space-5) var(--space-4);
+    display: grid;
+    gap: var(--space-4);
+    justify-items: start;
+  }
+
+  .joinText {
+    max-width: var(--measure);
+    font-size: var(--t-base);
+    line-height: var(--lh-body);
+    color: var(--fg-mute);
+    margin: 0;
+    text-wrap: pretty;
+  }
+
+  .contact {
+    display: grid;
+    gap: var(--space-2);
+    margin: 0;
+    width: 100%;
+  }
+
+  .pair {
+    display: grid;
+    grid-template-columns: 8ch 1fr;
+    gap: var(--space-3);
+    align-items: baseline;
+    padding-bottom: var(--space-2);
+    border-bottom: var(--hair) dotted var(--scan);
+  }
+
+  .pair dt {
+    font-family: var(--font-mono);
+    font-size: var(--t-micro);
+    letter-spacing: var(--track-label);
+    color: var(--fg-dim);
+  }
+
+  .pair dd {
+    margin: 0;
+    font-size: var(--t-sm);
+    color: var(--fg);
+  }
+
+  .cLink {
+    font-family: var(--font-mono);
+    font-size: var(--t-mono-sm);
+    letter-spacing: var(--track-mono);
+    color: var(--fg);
+    text-decoration: none;
+    border-bottom: var(--hair) solid var(--line);
+    transition:
+      color var(--dur-fast) var(--ease-out),
+      border-color var(--dur-fast) var(--ease-out);
+  }
+
+  .cLink:hover {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+  }
+
+  /* 좁아지면 패널이 한 화면보다 높아진다 — 덱을 붙여 두지 않는다. sticky 로 두면
+     아래쪽 시뮬이 잘린다. */
+  @media (max-width: 64rem) {
+    .deck { position: static; }
+    .deckRoom { min-block-size: 0; }
+  }
+
+  @media (max-width: 40rem) {
+    .panelHead {
+      align-items: flex-start;
+      gap: var(--space-2);
+    }
+
+    .keys { text-wrap: pretty; }
+  }
+</style>

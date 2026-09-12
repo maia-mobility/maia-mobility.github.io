@@ -1,0 +1,53 @@
+---
+import SectionHead from '../components/SectionHead';
+import PublicationList from '../components/PublicationList';
+import { byKind, PUBLICATIONS } from '../data/publications';
+import { pick, type Lang } from '../i18n';
+import { UI } from '../i18n/ui';
+
+interface Props { lang: Lang }
+const { lang } = Astro.props;
+
+const journals = byKind('journal');
+const conferences = byKind('conference');
+---
+
+<section class="container section" data-quiet>
+  <SectionHead
+    as="h1"
+    index="03"
+    label="PUBLICATIONS"
+    title={pick(UI.sectionPublications, lang)}
+    lang={lang}
+    meta={`${String(PUBLICATIONS.length).padStart(2, '0')} TOTAL`}
+  />
+
+  <div class="stack">
+    <SectionHead
+      index="03.1"
+      label="JOURNAL"
+      title={pick(UI.journalArticles, lang)}
+      lang={lang}
+      as="h2"
+      meta={`${String(journals.length).padStart(2, '0')}`}
+    />
+    <PublicationList items={journals} lang={lang} />
+  </div>
+
+  <div class="stack">
+    <SectionHead
+      index="03.2"
+      label="CONFERENCE"
+      title={pick(UI.conferencePapers, lang)}
+      lang={lang}
+      as="h2"
+      meta={`${String(conferences.length).padStart(2, '0')}`}
+    />
+    <PublicationList items={conferences} lang={lang} />
+  </div>
+</section>
+
+<style>
+  .section { display: grid; gap: var(--space-7); padding-block: var(--space-7) var(--section-y); }
+  .stack { display: grid; gap: var(--space-3); }
+</style>

@@ -1,0 +1,68 @@
+---
+import SectionHead from '../components/SectionHead';
+import PersonCard from '../components/PersonCard';
+import HudFrame from '../components/HudFrame';
+import Button from '../components/Button';
+import { PI, MEMBERS, ALUMNI } from '../data/people';
+import { SITE } from '../data/site';
+import { pick, type Lang } from '../i18n';
+import { UI } from '../i18n/ui';
+
+interface Props { lang: Lang }
+const { lang } = Astro.props;
+---
+
+<section class="container section" data-quiet>
+  <SectionHead
+    as="h1"
+    index="02"
+    label="PEOPLE"
+    title={pick(UI.sectionPeople, lang)}
+    lang={lang}
+    meta={`${String(1 + MEMBERS.length).padStart(2, '0')} MEMBERS`}
+  />
+
+  <PersonCard person={PI} lang={lang} detailed />
+
+  <div class="stack">
+    <SectionHead index="02.1" label="MEMBERS" title={pick(UI.members, lang)} lang={lang} as="h2" />
+
+    {MEMBERS.length > 0 ? (
+      <div class="grid">
+        {MEMBERS.map((m) => <PersonCard person={m} lang={lang} />)}
+      </div>
+    ) : (
+      <HudFrame edges={['top', 'left']} ticks label="RECRUITING" class="empty">
+        <p class="emptyText" lang={lang}>{pick(UI.membersEmpty, lang)}</p>
+        <p class="emptyText" lang={lang}>{pick(SITE.recruiting, lang)}</p>
+        <Button href={`mailto:${SITE.contact.email}`}>{pick(UI.emailUs, lang)}</Button>
+      </HudFrame>
+    )}
+  </div>
+
+  {ALUMNI.length > 0 && (
+    <div class="stack">
+      <SectionHead index="02.2" label="ALUMNI" title={pick(UI.alumni, lang)} lang={lang} as="h2" />
+      <div class="grid">
+        {ALUMNI.map((m) => <PersonCard person={m} lang={lang} />)}
+      </div>
+    </div>
+  )}
+</section>
+
+{/*
+  인물 사진의 dot 해상 효과. React 없이 구동한다 —
+  이 페이지의 유일한 인터랙션이라 런타임을 실을 이유가 없다 (AGENTS.md "아일랜드 최소화").
+*/}
+<script>
+  import { mountAllDotPortraits } from '../lib/dotPortrait';
+  mountAllDotPortraits();
+</script>
+
+<style>
+  .section { display: grid; gap: var(--space-7); padding-block: var(--space-7) var(--section-y); }
+  .stack { display: grid; gap: var(--space-4); }
+  .grid { display: grid; gap: var(--space-4); grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr)); }
+  .empty { padding: var(--space-5) var(--space-4); display: grid; gap: var(--space-3); justify-items: start; }
+  .emptyText { max-width: var(--measure); font-size: var(--t-sm); line-height: var(--lh-body); color: var(--fg-mute); margin: 0; text-wrap: pretty; }
+</style>

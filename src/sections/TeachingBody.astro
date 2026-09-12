@@ -1,0 +1,26 @@
+---
+import SectionHead from '../components/SectionHead';
+import CourseList from '../components/CourseList';
+import { COURSES } from '../data/teaching';
+import { pick, type Lang } from '../i18n';
+import { UI } from '../i18n/ui';
+
+interface Props { lang: Lang }
+const { lang } = Astro.props;
+---
+
+<section class="container section" data-quiet>
+  <SectionHead
+    as="h1"
+    index="04"
+    label="TEACHING"
+    title={pick(UI.sectionTeaching, lang)}
+    lang={lang}
+    meta={`${String(COURSES.length).padStart(2, '0')} COURSES`}
+  />
+  <CourseList lang={lang} />
+</section>
+
+<style>
+  .section { display: grid; gap: var(--space-6); padding-block: var(--space-7) var(--section-y); }
+</style>

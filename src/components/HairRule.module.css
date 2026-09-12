@@ -1,0 +1,44 @@
+/* HairRule — 구분자. 기본은 점선 스캔 라인(하드 룰 6).
+   실선은 프레임 내부 구획처럼 "진짜 경계"일 때만 쓴다. */
+
+.rule {
+  --rule-color: var(--line-hot);
+
+  display: block;
+  inline-size: 100%;
+  block-size: 0;
+  border: none;
+  border-block-start-width: var(--hair);
+  border-block-start-color: var(--rule-color);
+  margin: 0;
+}
+
+.scan {
+  border-block-start-style: dotted;
+}
+
+.solid {
+  --rule-color: var(--line);
+  border-block-start-style: solid;
+}
+
+.hot {
+  --rule-color: var(--accent);
+}
+
+/* 수직 변형 — 컬럼 사이 계측선 */
+.vertical {
+  inline-size: 0;
+  block-size: 100%;
+  border-block-start: none;
+  border-inline-start-width: var(--hair);
+  border-inline-start-color: var(--rule-color);
+}
+
+.vertical.scan {
+  border-inline-start-style: dotted;
+}
+
+.vertical.solid {
+  border-inline-start-style: solid;
+}

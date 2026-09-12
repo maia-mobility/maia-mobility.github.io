@@ -1,0 +1,232 @@
+.header {
+  position: sticky;
+  top: 0;
+  z-index: var(--z-nav);
+  background: var(--scrim);
+  border-bottom: var(--hair) solid var(--line);
+}
+
+.bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  max-width: var(--container-max);
+  margin-inline: auto;
+  padding: var(--space-2) var(--gutter);
+}
+
+/* ── 브랜드 ───────────────────────────────────────── */
+
+.brand {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  text-decoration: none;
+  margin-inline-end: auto;
+  min-width: 0;
+}
+
+.brandShort {
+  font-family: var(--font-sans);
+  font-size: var(--t-lg);
+  font-weight: var(--w-light);
+  letter-spacing: var(--track-heading);
+  color: var(--fg);
+  line-height: var(--lh-0);
+}
+
+.brandExpand {
+  font-family: var(--font-mono);
+  font-size: var(--t-micro);
+  letter-spacing: var(--track-label);
+  color: var(--fg-mute);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.brand:hover .brandShort {
+  color: var(--accent);
+}
+
+/* ── 데스크톱 내비 ──────────────────────────────────── */
+
+.desktop {
+  display: none;
+}
+
+.list {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.link,
+.linkCurrent {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-2);
+  text-decoration: none;
+  font-family: var(--font-mono);
+  font-size: var(--t-mono-sm);
+  letter-spacing: var(--track-mono);
+  transition: color var(--dur-fast) var(--ease-out);
+}
+
+.link {
+  color: var(--fg-mute);
+}
+
+.link:hover {
+  color: var(--fg);
+}
+
+.linkCurrent {
+  color: var(--accent);
+}
+
+.linkIndex {
+  font-size: var(--t-micro);
+  color: var(--fg-dim);
+}
+
+.link:hover .linkIndex {
+  color: var(--accent);
+}
+
+.linkCurrent .linkIndex {
+  color: var(--accent);
+}
+
+/* 현재 항목은 아래 1px 선으로 표시 — 배경을 채우지 않는다 */
+.linkCurrent .linkLabel {
+  border-bottom: var(--hair) solid var(--accent);
+  padding-bottom: 2px;
+}
+
+/* ── 우측 ─────────────────────────────────────────── */
+
+.tail {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-shrink: 0;
+}
+
+.menuBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: var(--tap-min);
+  padding: var(--space-1) var(--space-2);
+  background: none;
+  border: var(--hair) solid var(--line);
+  color: var(--fg-mute);
+  font-family: var(--font-mono);
+  font-size: var(--t-micro);
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+  cursor: pointer;
+  transition:
+    color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out);
+}
+
+.menuBtn:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+/* ── 모바일 오버레이 ────────────────────────────────── */
+
+.panel {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-overlay);
+  background: var(--bg);
+  padding: calc(var(--space-9) + var(--space-6)) var(--gutter) var(--space-6);
+  overflow-y: auto;
+}
+
+.panelList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-top: var(--hair) dotted var(--scan);
+}
+
+.panelItem {
+  border-bottom: var(--hair) dotted var(--scan);
+}
+
+.panelLink,
+.panelLinkCurrent {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  padding: var(--space-3) 0;
+  text-decoration: none;
+  font-family: var(--font-sans);
+  font-size: var(--t-h3);
+  font-weight: var(--w-light);
+  letter-spacing: var(--track-heading);
+  line-height: var(--lh-1);
+}
+
+.panelLink {
+  color: var(--fg);
+}
+
+.panelLinkCurrent {
+  color: var(--accent);
+}
+
+.panelIndex {
+  font-family: var(--font-mono);
+  font-size: var(--t-micro);
+  letter-spacing: var(--track-label);
+  color: var(--fg-dim);
+  flex-shrink: 0;
+}
+
+.panelLinkCurrent .panelIndex {
+  color: var(--accent);
+}
+
+/* ── 반응형 ───────────────────────────────────────── */
+
+@media (min-width: 60rem) {
+  .desktop {
+    display: block;
+  }
+
+  .menuBtn {
+    display: none;
+  }
+
+  .panel {
+    display: none;
+  }
+
+  .brand {
+    margin-inline-end: var(--space-4);
+  }
+
+  .tail {
+    margin-inline-start: auto;
+  }
+}
+
+@media (max-width: 26rem) {
+  .brandExpand {
+    display: none;
+  }
+
+  .menuLabel {
+    display: none;
+  }
+}

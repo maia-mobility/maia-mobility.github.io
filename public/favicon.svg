@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <title>MAIA Lab</title>
+  <!-- 원근으로 물러나는 도로를 LiDAR intensity 램프로 찍은 점군.
+       모서리는 직각 — 사이트 전체 규칙과 동일하다. -->
+  <rect width="32" height="32" fill="#05070A"/>
+
+  <!-- 근거리: 굵고 뜨겁다 (red → orange) -->
+  <g fill="#EF4444">
+    <rect x="3"  y="25" width="4" height="4"/>
+    <rect x="25" y="25" width="4" height="4"/>
+  </g>
+  <g fill="#F97316">
+    <rect x="6"  y="21" width="3.5" height="3.5"/>
+    <rect x="22.5" y="21" width="3.5" height="3.5"/>
+  </g>
+
+  <!-- 중거리: amber → lime -->
+  <g fill="#FDE047">
+    <rect x="9"  y="17" width="3" height="3"/>
+    <rect x="20" y="17" width="3" height="3"/>
+  </g>
+  <g fill="#A3E635">
+    <rect x="11.5" y="13.5" width="2.5" height="2.5"/>
+    <rect x="18"   y="13.5" width="2.5" height="2.5"/>
+  </g>
+
+  <!-- 원거리: cyan → blue, 소실점으로 수렴 -->
+  <g fill="#22D3EE">
+    <rect x="13.5" y="10.5" width="2" height="2"/>
+    <rect x="16.5" y="10.5" width="2" height="2"/>
+  </g>
+  <g fill="#1D4ED8">
+    <rect x="14.5" y="8" width="1.5" height="1.5"/>
+    <rect x="16"   y="8" width="1.5" height="1.5"/>
+  </g>
+
+  <!-- 중앙 차선 도색 — 가장 밝은 반사 -->
+  <g fill="#E8EFF5">
+    <rect x="15.5" y="19" width="1" height="3"/>
+    <rect x="15.5" y="24.5" width="1" height="4"/>
+  </g>
+</svg>

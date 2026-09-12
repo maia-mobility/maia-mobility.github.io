@@ -1,0 +1,13 @@
+---
+// 홈.
+//   ① 히어로 — LiDAR 포인트클라우드 (사이트의 첫 화면, 유일한 client:load 아일랜드)
+//   ② 본문   — HomeBody (미션 · 연구분야 · 소식 · 함께하기)
+import Page from '../layouts/Page.astro';
+import PointCloudHero from '../components/PointCloudHero.tsx';
+import HomeBody from '../sections/HomeBody.astro';
+---
+
+<Page lang="en" page="" transparentHeader={true}>
+  <PointCloudHero client:load lang="en" />
+  <HomeBody lang="en" />
+</Page>

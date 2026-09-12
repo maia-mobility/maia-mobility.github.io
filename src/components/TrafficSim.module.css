@@ -1,0 +1,253 @@
+/* TrafficSim — 계측 장비의 화면. 카드가 아니라 HudFrame 안의 캔버스 + 수치판이다.
+   빛나는 것은 캔버스뿐이고, 여기 CSS 에는 그림자도 그라디언트도 둥근 모서리도 없다. */
+
+.wrap {
+  display: block;
+  inline-size: 100%;
+  min-inline-size: 0;
+}
+
+.frame {
+  --hud-pad: var(--space-3);
+  display: grid;
+  gap: var(--space-3);
+  min-inline-size: 0;
+  background-color: var(--bg-raise);
+  --hud-surface: var(--bg-raise);
+}
+
+/* 홈 덱에서는 계측기 자체만 남긴다 — 설정 표기와 축 라벨은 연구 페이지의 몫이다. */
+.compact {
+  gap: var(--space-2);
+}
+
+/* --- 머리: 계측 표기 한 줄 + 토글 --------------------------------------- */
+.head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.readout {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: var(--t-mono-sm);
+  line-height: var(--lh-mono);
+  letter-spacing: var(--track-mono);
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.axis {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: var(--t-micro);
+  line-height: var(--lh-mono);
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+  color: var(--fg-dim);
+  white-space: nowrap;
+}
+
+/* --- 토글: Button 어휘(각진 1px · 모노 대문자 · hover 시 테두리 점등)의 소형판 --- */
+.controls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  flex-wrap: wrap;
+}
+
+.ctrl {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5em;
+  min-block-size: var(--space-4);
+  padding-inline: var(--space-1);
+  background-color: transparent;
+  border: var(--hair) solid var(--line);
+  color: var(--fg-mute);
+  font-family: var(--font-mono);
+  font-size: var(--t-micro);
+  line-height: var(--lh-mono);
+  letter-spacing: var(--track-mono);
+  text-transform: uppercase;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    border-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
+}
+
+/* 배경 채움 금지 — 테두리와 글자만 점등한다. */
+.ctrl:hover,
+.ctrl:focus-visible {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.ctrl[aria-pressed='true'] {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* ▸ 캐럿은 선택된 항목에만 — 어느 것이 켜져 있는지 색 말고도 표가 난다. */
+.caret {
+  font-size: 0.9em;
+  line-height: 1;
+  color: var(--accent);
+  visibility: hidden;
+}
+
+.ctrl[aria-pressed='true'] .caret {
+  visibility: visible;
+}
+
+/* --- 캔버스 ------------------------------------------------------------- */
+.canvas {
+  display: block;
+  inline-size: 100%;
+  block-size: clamp(184px, 24vw, 300px);
+  background-color: var(--bg);
+  border-block-start: var(--hair) solid var(--line);
+  border-block-end: var(--hair) solid var(--line);
+}
+
+/* --- 수치판 ------------------------------------------------------------- */
+/* 수치와 그 상태 표시를 한 덩어리로 묶는다 — 상태 줄은 숫자의 각주이지 별개 블록이 아니다. */
+.readings {
+  display: grid;
+  gap: var(--space-1);
+  min-inline-size: 0;
+}
+
+.hud {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr));
+  gap: var(--space-2) var(--space-3);
+  margin: 0;
+}
+
+.cell {
+  display: grid;
+  gap: 2px;
+  min-inline-size: 0;
+}
+
+.cellLabel {
+  font-family: var(--font-mono);
+  font-size: var(--t-micro);
+  line-height: var(--lh-mono);
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+  color: var(--fg-dim);
+}
+
+.cellValue {
+  display: flex;
+  align-items: baseline;
+  gap: 0.35em;
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: var(--t-base);
+  line-height: var(--lh-mono);
+  color: var(--fg);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 첫 칸이 그 시나리오의 결론값이다 — 크게, 시안으로 점등. */
+.cellLead .cellValue {
+  font-size: var(--t-h3);
+  line-height: var(--lh-1);
+  color: var(--accent);
+}
+
+.figure {
+  font-variant-numeric: tabular-nums;
+}
+
+.unit {
+  font-size: var(--t-micro);
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+  color: var(--fg-dim);
+}
+
+/* --- 측정 상태 표시등 ---------------------------------------------------- */
+/* 계측 장비의 annunciator. 결론값이 확정되기 전에는 여기에 그 사실이 적힌다 —
+   플래툰은 제동파가 후미를 지나가야, 링은 2바퀴 측정 창이 차야 값이 확정된다. */
+.state {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: var(--t-micro);
+  line-height: var(--lh-mono);
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+  color: var(--fg-dim);
+  font-variant-numeric: tabular-nums;
+  text-wrap: balance;
+}
+
+/* 상태 표시등의 사각 틱. 글리프는 장식이라 스크린리더에서 감춘다(버튼의 ▸ 와 같은 규칙). */
+.tick {
+  margin-inline-end: 0.7em;
+}
+
+/* 측정 중은 앰버 — 이 팔레트에서 앰버는 시안(확정·제어)에 대비되는 보조 신호다. */
+.state[data-state='measuring'] {
+  color: var(--warn);
+}
+
+/* 사이클이 끝나야 뜻이 생기는 누적값은 확정 전까지 흐리게 찍는다. */
+.hud[data-state='measuring'] .provisional .cellValue {
+  color: var(--fg-mute);
+}
+
+/* 읽힌 값이 없으면 단위도 붙이지 않는다 — "— ×" 는 계측값처럼 보인다. */
+.hud[data-sim='platoon'][data-state='measuring'] .cellLead .unit {
+  display: none;
+}
+
+/* --- 구성 표기 ---------------------------------------------------------- */
+.setup {
+  margin: 0;
+  padding-block-start: var(--space-2);
+  border-block-start: var(--hair) dotted var(--scan);
+  font-family: var(--font-mono);
+  font-size: var(--t-micro);
+  line-height: var(--lh-mono);
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+  color: var(--fg-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 좁은 화면: 표기 줄과 토글을 위아래로 쌓는다. */
+@media (max-width: 620px) {
+  .head {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  .canvas {
+    block-size: 176px;
+  }
+
+  .hud {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* 아주 좁은 화면: 토글 축 라벨을 감춘다. 같은 문구가 group 의 aria-label 로 남아
+   스크린리더에는 그대로 전달되고, 버튼 4개는 한 줄에 들어간다. */
+@media (max-width: 520px) {
+  .controls .axis {
+    display: none;
+  }
+
+  .ctrl {
+    padding-inline: var(--space-05);
+  }
+}

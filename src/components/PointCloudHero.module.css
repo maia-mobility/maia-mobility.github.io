@@ -1,0 +1,289 @@
+/* PointCloudHero — 도로는 **페이지 전체의 고정 배경**이다.
+   캔버스가 뷰포트에 깔려 있고, 히어로 → 미션 → 연구 → 소식 → 함께하기 → 푸터의
+   주소까지 스크롤 내내 그 위를 지나간다. 핀(sticky) 구간은 없다.
+
+   빛나는 것은 캔버스뿐이다. 여기 CSS 에는 글로우도, 그림자도, 둥근 모서리도 없다. */
+
+/* --- 진행도 ------------------------------------------------------------
+   `--h`(히어로 퇴장) · `--p`(문서 진행) · `--v`(차량/시점 전환) 를
+   usePointCloud 가 rAF 안에서 이 요소에 직접 써 넣는다. 여기서는 그 값으로
+   히어로 요소들의 퇴장 순서를 짜고 도로를 배경 밝기로 물린다.
+
+   JS 가 없거나 동작 줄이기면 값이 없고 폴백 0 — 전부 보이는 착지 상태다.
+   건드리는 속성은 opacity 와 transform 뿐이다(레이아웃 유발 없음).      */
+.road {
+  --hh: var(--h, 0);
+  --pp: var(--p, 0);
+  --vv: var(--v, 0);
+  position: relative;
+  display: block;
+  inline-size: 100%;
+}
+
+/* 캔버스는 장식이자 데이터 시각화다. 내용은 전부 아래 DOM 텍스트가 갖는다.
+   z-index 음수 → 본문·헤더·푸터가 전부 이 위에 얹힌다. */
+.canvas {
+  position: fixed;
+  inset: 0;
+  inline-size: 100%;
+  block-size: 100%;
+  z-index: -1;
+  /* 레이어 전체를 반투명하게 죽이면 도로가 "흐린 그림"이 될 뿐 배경과 섞이지
+     않는다. 여기서는 한 단계만 물린다(1 → 0.78) — 본문 가독성은 텍스트 블록
+     뒤에 깔리는 국소 스크림(`.plate`, global.css §6)이 맡는다. */
+  opacity: calc(1 - clamp(0, (var(--hh) - 0.2) / 0.5, 1) * 0.22);
+}
+
+/* 하드 룰 5의 명시적 예외 — 캔버스 위 텍스트 가독성을 위한 수직 페이드 "1개".
+   대시캠 구간은 근거리 점군이 화면 하단에 가장 밝고 조밀하게 깔린다. 캔버스를
+   통째로 반투명하게 만들면 도로가 "흐린 그림"이 될 뿐이라, 대신 **화면 아래쪽에만**
+   거는 이 국소 스크림이 본문 뒤 지면을 조용하게 만든다.
+   사이트 전체에서 gradient 는 이 한 줄이 유일하다.
+   `allow-fade` 표식은 scripts/lint-design.mjs 가 이 예외를 인식하는 표시다. */
+.scrim {
+  /* 히어로에서는 가득, 그 뒤로는 **카메라가 낮은 동안**(미션 구간) 남아 있다가
+     연구 구간에서 시점이 올라가면 걷힌다 — 위에서 내려다보는 노면은 원래 어둡다.
+     그리고 **문서 끝(푸터)에서 다시 돌아온다**: 화면 하단은 근거리 점이라 가장 밝은데
+     하필 거기가 주소·연락처 자리다. 도로는 계속 보이되 글자가 읽혀야 한다. */
+  opacity: max(
+    calc(1 - clamp(0, (var(--hh) - 0.12) / 0.28, 1)),
+    calc((1 - clamp(0, var(--vv) / 0.6, 1)) * 0.72),
+    calc(clamp(0, (var(--pp) - 0.74) / 0.26, 1) * 0.82)
+  );
+  position: fixed;
+  inset-inline: 0;
+  inset-block-end: 0;
+  block-size: 58%;
+  z-index: -1;
+  pointer-events: none;
+  background-image: linear-gradient( /* allow-fade */
+    to bottom,
+    transparent 0%,
+    color-mix(in srgb, var(--bg) 48%, transparent) 46%,
+    color-mix(in srgb, var(--bg) 86%, transparent) 100%
+  );
+}
+
+/* --- 히어로 — 그냥 한 화면짜리 섹션이다 -------------------------------- */
+.hero {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  inline-size: 100%;
+  /* 모바일 주소창 때문에 100vh 는 피한다. svh 미지원 브라우저용 폴백 1줄. */
+  min-block-size: 100vh;
+  min-block-size: 100svh;
+}
+
+.inner {
+  position: relative;
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: var(--space-6);
+  inline-size: 100%;
+  max-inline-size: calc(var(--container-max) + var(--gutter) * 2);
+  margin-inline: auto;
+  padding-inline: var(--gutter);
+  /* 상단 여백은 겹쳐 뜬 헤더(global.css §7)를 피해 갈 만큼 준다 — 모바일 헤더가
+     가장 높아서(약 76px) 그 기준으로 잡았다. */
+  padding-block: var(--space-9) var(--space-6);
+}
+
+/* --- HUD 한 줄 -------------------------------------------------------
+   타이핑은 clip-path steps() 로만 낸다. 프레임당 setState 없음, JS 0줄.
+   ch 단위가 아니라 %(자기 폭 기준)라서 폰트 폴백에 폭이 흔들려도 안전하다. */
+.hud {
+  /* h 0.05 → 0.18 */
+  --k: clamp(0, (var(--hh) - 0.05) / 0.13, 1);
+  opacity: calc(1 - var(--k));
+  transform: translate3d(0, calc(var(--k) * -18px), 0);
+  min-inline-size: 0;
+  max-inline-size: 100%;
+  overflow: hidden;
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: var(--t-micro);
+  font-weight: var(--w-mono);
+  line-height: var(--lh-mono);
+  /* 44자를 320px 뷰포트 안에 넣어야 해서 트래킹은 거의 주지 않는다. */
+  letter-spacing: 0.01em;
+  /* 문자열이 이미 계측 표기다. uppercase 로 덮으면 단위(Hz)가 망가진다. */
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.hudType {
+  display: inline-block;
+  max-inline-size: 100%;
+  clip-path: inset(0 100% 0 0);
+  animation-name: hud-type;
+  animation-duration: 2.1s;
+  animation-timing-function: steps(var(--type-steps, 44), end);
+  animation-delay: 0.25s;
+  animation-fill-mode: both;
+}
+
+/* 캐럿도 클립 안에 있으므로 타이핑이 끝나야 나타난다. */
+.hudType::after {
+  content: '';
+  display: inline-block;
+  inline-size: 0.55em;
+  block-size: 1em;
+  margin-inline-start: 0.2em;
+  vertical-align: text-bottom;
+  background-color: var(--accent);
+  animation: hud-caret 1.05s steps(2, jump-none) infinite;
+}
+
+@keyframes hud-type {
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+
+@keyframes hud-caret {
+  50% {
+    opacity: 0;
+  }
+}
+
+/* --- 하단: 타이포 블록 + 스크롤 힌트 ---------------------------------- */
+.foot {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.block {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+  min-inline-size: 0;
+}
+
+.title {
+  /* h 0.20 → 0.52 — 가장 무겁고 가장 늦게, 가장 멀리 물러난다 */
+  --k: clamp(0, (var(--hh) - 0.2) / 0.32, 1);
+  opacity: calc(1 - var(--k));
+  transform: translate3d(0, calc(var(--k) * -76px), 0);
+  margin: 0;
+  font-size: var(--t-display);
+  /* 4글자 워드마크는 굵기보다 크기로 말한다. 가늘게 두고 여백을 준다. */
+  font-weight: var(--w-light);
+  line-height: var(--lh-0);
+  letter-spacing: var(--track-display);
+  color: var(--fg);
+}
+
+.expansion {
+  /* h 0.16 → 0.42 */
+  --k: clamp(0, (var(--hh) - 0.16) / 0.26, 1);
+  opacity: calc(1 - var(--k));
+  transform: translate3d(0, calc(var(--k) * -34px), 0);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.55em;
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: var(--t-mono-sm);
+  font-weight: var(--w-mono);
+  line-height: var(--lh-mono);
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+  color: var(--fg-mute);
+}
+
+/* 구분 점 — 사이트 전체의 dot 언어. 가운뎃점 하나를 액센트로 점등한다. */
+.dot {
+  color: var(--accent);
+}
+
+.lead {
+  /* h 0.10 → 0.34 — 본문이 가장 먼저 자리를 비운다 */
+  --k: clamp(0, (var(--hh) - 0.1) / 0.24, 1);
+  opacity: calc(1 - var(--k));
+  transform: translate3d(0, calc(var(--k) * -30px), 0);
+  margin: 0;
+  max-inline-size: 54ch;
+  font-size: var(--t-lg);
+  line-height: 1.5;
+  color: var(--fg-mute);
+}
+
+/* --- 스크롤 힌트 ------------------------------------------------------ */
+.scroll {
+  /* h 0.02 → 0.10 — 스크롤을 시작한 순간 역할이 끝난 힌트다 */
+  --k: clamp(0, (var(--hh) - 0.02) / 0.08, 1);
+  opacity: calc(1 - var(--k));
+  transform: translate3d(0, calc(var(--k) * -14px), 0);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: var(--t-micro);
+  line-height: var(--lh-mono);
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+  color: var(--fg-dim);
+}
+
+/* 하드 룰 7 — 둥근 아이콘이 아니라 1px 스트로크 기술 기호 */
+.arrow {
+  display: block;
+  inline-size: 10px;
+  block-size: 26px;
+  color: var(--accent);
+  animation: scroll-tick 2.4s var(--ease-in-out) infinite;
+}
+
+@keyframes scroll-tick {
+  0%,
+  60%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.55;
+  }
+  30% {
+    transform: translateY(5px);
+    opacity: 1;
+  }
+}
+
+/* 좁은 화면: 스크롤 힌트를 블록 아래로 내리고 리드 폭을 줄인다. */
+@media (max-width: 700px) {
+  .foot {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: var(--space-5);
+  }
+
+  .lead {
+    font-size: var(--t-base);
+  }
+}
+
+/* 낮은 화면(가로로 눕힌 폰, 짧은 창): 먼저 상하 여백을 조인다. */
+@media (max-height: 700px) {
+  .inner {
+    padding-block: var(--space-8) var(--space-4);
+  }
+}
+
+/* 동작 줄이기: 스캔이 끝난 정지 프레임 한 장. 진행도가 흐르지 않으므로
+   본문 가독성을 위한 감광을 고정값으로 건다. */
+@media (prefers-reduced-motion: reduce) {
+  .canvas {
+    opacity: 0.78;
+  }
+
+  .scrim {
+    opacity: 1;
+  }
+}

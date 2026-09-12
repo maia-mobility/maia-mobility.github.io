@@ -1,0 +1,61 @@
+# GitHub Pages 배포.
+#
+# 쓰기 전에 할 일:
+#   1. 저장소 Settings → Pages → Source 를 "GitHub Actions" 로 바꾼다
+#   2. 아래 SITE_URL 을 실제 주소로 바꾼다
+#      - 사용자/조직 페이지: https://<계정>.github.io
+#      - 프로젝트 페이지:   https://<계정>.github.io/<저장소>
+#        (이 경우 astro.config.mjs 에 base: '/<저장소>' 도 추가해야 한다)
+#   3. 학교 도메인을 쓴다면 SITE_URL 만 바꾸고 public/CNAME 파일을 추가한다
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# 배포는 한 번에 하나만. 진행 중인 것을 취소하지는 않는다.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build
+        run: npm run build
+        env:
+          SITE_URL: ${{ vars.SITE_URL || 'https://example.github.io' }}
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

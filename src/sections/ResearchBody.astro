@@ -1,0 +1,87 @@
+---
+import SectionHead from '../components/SectionHead';
+import TrafficSim from '../components/TrafficSim';
+import { RESEARCH } from '../data/research';
+import { pick, type Lang } from '../i18n';
+import { UI } from '../i18n/ui';
+
+interface Props { lang: Lang }
+const { lang } = Astro.props;
+---
+
+<section class="container section" data-quiet>
+  <SectionHead
+    as="h1"
+    index="01"
+    label="RESEARCH"
+    title={pick(UI.sectionResearch, lang)}
+    lang={lang}
+    meta={`${String(RESEARCH.length).padStart(2, '0')} AREAS`}
+  />
+
+  {RESEARCH.map((area) => (
+    <article class="area" id={area.id} data-reveal="">
+      <div class="areaHead">
+        <p class="areaIndex" aria-hidden="true">{area.index}</p>
+        <h2 class="areaTitle" lang={lang}>{pick(area.title, lang)}</h2>
+        <ul class="chips">
+          {area.keywords.map((k) => <li class="chip">{k}</li>)}
+        </ul>
+      </div>
+
+      {/*
+        실제 IDM 교통 시뮬레이션. 설명문 대신 이것이 분야를 보여준다.
+        아일랜드는 화면에 들어올 때만 하이드레이트하고, 훅이 화면 밖에서 rAF 를 멈춘다.
+        JS 가 없어도 HUD 라벨·구성 표기는 서버 렌더된 텍스트로 남는다.
+      */}
+      <TrafficSim client:visible scenario={area.scenario} lang={lang} />
+    </article>
+  ))}
+</section>
+
+<style>
+  .section { display: grid; gap: var(--space-7); padding-block: var(--space-7) var(--section-y); }
+
+  .area {
+    display: grid;
+    gap: var(--space-4);
+    padding-top: var(--space-5);
+    border-top: var(--hair) dotted var(--scan);
+  }
+
+  .areaHead { display: grid; gap: var(--space-2); }
+
+  .areaIndex {
+    font-family: var(--font-mono);
+    font-size: var(--t-micro);
+    letter-spacing: var(--track-label);
+    color: var(--line-hot);
+    margin: 0;
+  }
+
+  .areaTitle {
+    max-width: var(--measure);
+    font-family: var(--font-sans);
+    font-size: var(--t-h2);
+    font-weight: var(--w-light);
+    line-height: var(--lh-1);
+    letter-spacing: var(--track-display);
+    color: var(--fg);
+    margin: 0;
+    text-wrap: balance;
+  }
+
+  .chips { display: flex; flex-wrap: wrap; gap: var(--space-1); list-style: none; margin: var(--space-1) 0 0; padding: 0; }
+
+  /* 각진 1px 칩 — pill 금지 */
+  .chip {
+    font-family: var(--font-mono);
+    font-size: var(--t-micro);
+    letter-spacing: var(--track-label);
+    text-transform: uppercase;
+    color: var(--fg-mute);
+    border: var(--hair) solid var(--line);
+    padding: 3px var(--space-1);
+  }
+
+</style>

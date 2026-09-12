@@ -1,0 +1,146 @@
+.footer {
+  border-top: var(--hair) dotted var(--scan);
+  margin-top: var(--section-y);
+  padding-block: var(--space-7) var(--space-5);
+}
+
+.inner {
+  max-width: var(--container-max);
+  margin-inline: auto;
+  padding-inline: var(--gutter);
+  display: grid;
+  gap: var(--space-6);
+}
+
+/* ── 상단 ─────────────────────────────────────────── */
+
+.lead {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.mark {
+  font-family: var(--font-sans);
+  font-size: var(--t-h2);
+  font-weight: var(--w-thin);
+  letter-spacing: var(--track-display);
+  line-height: var(--lh-0);
+  color: var(--fg);
+  margin: 0;
+}
+
+.expand {
+  font-family: var(--font-mono);
+  font-size: var(--t-micro);
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+  color: var(--fg-mute);
+  margin: 0;
+}
+
+.recruit {
+  max-width: var(--measure);
+  font-size: var(--t-sm);
+  line-height: var(--lh-body);
+  color: var(--fg-mute);
+  margin: var(--space-2) 0 0;
+}
+
+/* ── 3열 ──────────────────────────────────────────── */
+
+.cols {
+  display: grid;
+  gap: var(--space-5);
+  padding-top: var(--space-5);
+  border-top: var(--hair) solid var(--line);
+}
+
+.col {
+  display: grid;
+  gap: var(--space-2);
+  align-content: start;
+}
+
+.colHead {
+  font-family: var(--font-mono);
+  font-size: var(--t-micro);
+  font-weight: var(--w-mono);
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+  color: var(--fg-dim);
+  margin: 0;
+}
+
+.items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-1);
+}
+
+.mailto,
+.tel,
+.navLink {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  text-decoration: none;
+  font-size: var(--t-sm);
+  color: var(--fg);
+  transition: color var(--dur-fast) var(--ease-out);
+}
+
+.mailto,
+.tel {
+  font-family: var(--font-mono);
+  font-size: var(--t-mono-sm);
+  letter-spacing: var(--track-mono);
+}
+
+.mailto:hover,
+.tel:hover,
+.navLink:hover {
+  color: var(--accent);
+}
+
+.navIndex {
+  font-family: var(--font-mono);
+  font-size: var(--t-micro);
+  color: var(--fg-dim);
+}
+
+.address {
+  font-style: normal;
+  font-size: var(--t-sm);
+  line-height: var(--lh-body);
+  color: var(--fg-mute);
+  max-width: 34ch;
+}
+
+/* ── 하단 ─────────────────────────────────────────── */
+
+.colophon {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1);
+  padding-top: var(--space-4);
+  border-top: var(--hair) solid var(--line);
+  font-family: var(--font-mono);
+  font-size: var(--t-micro);
+  letter-spacing: var(--track-label);
+  color: var(--fg-dim);
+  margin: 0;
+}
+
+.dot {
+  color: var(--line-hot);
+}
+
+@media (min-width: 45rem) {
+  .cols {
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--space-6);
+  }
+}

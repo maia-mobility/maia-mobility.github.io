@@ -1,0 +1,10 @@
+---
+import Page from '../../layouts/Page.astro';
+import PointCloudHero from '../../components/PointCloudHero.tsx';
+import HomeBody from '../../sections/HomeBody.astro';
+---
+
+<Page lang="ko" page="" transparentHeader={true}>
+  <PointCloudHero client:load lang="ko" />
+  <HomeBody lang="ko" />
+</Page>

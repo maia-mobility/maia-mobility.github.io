@@ -1,0 +1,496 @@
+/* ============================================================================
+   MAIA Lab — global.css
+   단일 출처(single source of truth). 모든 색·간격·타이포·레이어·시간은 여기서만 정의한다.
+   하드 룰: border-radius 0 · box-shadow 없음 · gradient 없음 · 색상 하드코딩 없음.
+   ============================================================================ */
+
+/* --- 1. Fonts (self-hosted, npm. CDN <link> 금지) ------------------------- */
+/* JetBrains Mono: HUD·메타·수치 */
+@import '@fontsource-variable/jetbrains-mono';
+/* Pretendard: 한글. dynamic-subset(92 chunk) — 실제로 쓰인 글자의 청크만 내려받는다.
+   단일 2MB woff2 대신 이걸 쓰는 이유는 성능 예산 때문이다. */
+@import 'pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css';
+
+/* ============================================================================
+   2. TOKENS
+   ============================================================================ */
+:root {
+  color-scheme: dark;
+
+  /* --- 2.1 색 (역할 정의 §3) ------------------------------------------- */
+  /*
+   * 무채색 계열. 이전 값들은 청색이 섞여 있어(#7a8899 · #2c3a4a) 회색이
+   * 청록으로 읽혔다 — UI 에서 색을 걷어내기로 한 이상 중성으로 내린다.
+   * 완전한 순회색(#808080)은 차가워서, 아주 미세한 온기만 남겼다.
+   */
+  --bg: #08090b;          /* 배경 (near-black) */
+  --bg-raise: #0d0e11;    /* 미세한 단차 — 깊이는 그림자가 아니라 광도 단계로 만든다 */
+  --line: #202125;        /* 헤어라인 1px */
+  --line-hot: #34363b;    /* hover 헤어라인 · 코너 틱 · 스캔 라인 점 */
+  --fg: #f0f0f2;          /* 본문 (순백 금지) */
+  --fg-mute: #9a9ba1;     /* 캡션·메타 — 배경 대비 7.6:1 (가는 한글 획에서도 읽힌다) */
+
+  /* LiDAR intensity 램프 — 참조 이미지에서 추출 */
+  --i-0: #1e3a8a;
+  --i-1: #1d4ed8;
+  --i-2: #22d3ee;
+  --i-3: #a3e635;
+  --i-4: #fde047;
+  --i-5: #f97316;
+  --i-6: #ef4444;
+
+  /*
+   * UI 액센트는 **무채색**이다.
+   *
+   * intensity 램프(--i-0‥--i-6)는 포인트클라우드와 그 위의 시뮬레이션 —
+   * 즉 "정밀도로지도" 안에서만 쓴다. 링크·버튼·HUD·토글 같은 화면 요소에까지
+   * 시안을 바르면 촌스러워진다. 색의 근원은 도로 하나로 족하다.
+   */
+  --accent: var(--fg);        /* 강조·hover·현재 상태 = 순백에 가까운 흰색 */
+  --warn: var(--fg-mute);     /* 보조 메타(연도·날짜·기간) = 회색 */
+
+  /* 파생 색 — 새 hex를 만들지 않고 color-mix로 토큰에서 유도한다. */
+  --fg-dim: color-mix(in srgb, var(--fg-mute) 58%, var(--bg));   /* disabled·최저 강조 */
+  --scan: var(--line-hot);                                        /* 점선 스캔 라인 */
+  --focus: var(--accent);                                         /* 포커스 링 */
+  --select-bg: color-mix(in srgb, var(--accent) 26%, var(--bg));  /* ::selection */
+  --scrim: color-mix(in srgb, var(--bg) 82%, transparent);        /* sticky nav backdrop */
+
+  /* --- 2.2 타입페이스 --------------------------------------------------- */
+  /*
+   * 애플 시스템 서체를 먼저 쓴다.
+   *   -apple-system / BlinkMacSystemFont → SF Pro (라틴)
+   *   'Apple SD Gothic Neo'              → 애플고딕 (한글)
+   *
+   * 둘 다 애플 기기에만 있는 시스템 폰트라 웹으로 배포할 수 없다.
+   * Pretendard 가 바로 이 애플 SD 산돌고딕 Neo 를 대체하려고 만들어진 글꼴이라,
+   * 폴백으로 두면 윈도우·안드로이드 방문자도 거의 같은 모양을 본다.
+   * (자체 호스팅되므로 네트워크·라이선스 문제도 없다.)
+   */
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo',
+    'Pretendard Variable', Pretendard, 'Segoe UI', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono Variable', ui-monospace, SFMono-Regular, Menlo,
+    Consolas, 'Apple SD Gothic Neo', 'Pretendard Variable', monospace;
+
+  /*
+   * 굵기 — 고급스러움은 가늘기에서 나온다.
+   * 큰 글씨일수록 가늘게 가고, 위계는 굵기가 아니라 크기·여백·색으로 만든다.
+   * 굵은 글씨를 쓰는 순간 화면이 값싸 보인다.
+   */
+  --w-thin: 200;      /* 디스플레이 — MAIA 워드마크처럼 아주 큰 글씨 */
+  --w-light: 300;     /* 헤딩 */
+  --w-regular: 400;   /* 본문 */
+  --w-medium: 500;    /* 거의 쓰지 않는다 — 모노 라벨의 가독성 확보용 */
+  /* 아래 세 개는 **언어와 무관하게 고정**이다. :lang(ko) 가 본문 굵기를 올려도
+     이들은 따라 올라가면 안 된다:
+     · 모노 계측 표기는 라틴 글꼴이라 한글 보정이 필요 없고, 굵어지면 시끄러워진다.
+     · 큰 헤딩은 한글에서도 이미 충분히 두껍게 보인다 — 올리면 값싸진다. */
+  --w-mono: 400;      /* HUD·라벨·수치 */
+  --w-mono-em: 500;   /* 버튼 — 트래킹이 넓어 한 단계 필요하다 */
+  --w-head: 500;      /* 섹션 제목(sans, 큰 글씨) */
+
+  /* --- 2.3 타이포 스케일 — clamp() 유동형, 320px → 1920px, 브레이크포인트 없음 --- */
+  /* 각 값: 320px에서 min, 1920px에서 max, 그 사이는 선형. rem 상수 + vw 기울기. */
+  --t-micro:   clamp(0.625rem,  0.6125rem + 0.0625vw, 0.6875rem);  /* 10 → 11 */
+  --t-mono-sm: clamp(0.6875rem, 0.675rem  + 0.0625vw, 0.75rem);    /* 11 → 12 */
+  --t-xs:      clamp(0.75rem,   0.7375rem + 0.0625vw, 0.8125rem);  /* 12 → 13 */
+  --t-sm:      clamp(0.8125rem, 0.8rem    + 0.0625vw, 0.875rem);   /* 13 → 14 */
+  --t-base:    clamp(0.9375rem, 0.9125rem + 0.125vw,  1.0625rem);  /* 15 → 17 */
+  --t-lg:      clamp(1.0625rem, 1.025rem  + 0.1875vw, 1.25rem);    /* 17 → 20 */
+  --t-h4:      clamp(1.125rem,  1.075rem  + 0.25vw,   1.375rem);   /* 18 → 22 */
+  --t-h3:      clamp(1.375rem,  1.275rem  + 0.5vw,    1.875rem);   /* 22 → 30 */
+  --t-h2:      clamp(1.75rem,   1.525rem  + 1.125vw,  2.875rem);   /* 28 → 46 */
+  --t-h1:      clamp(2.25rem,   1.85rem   + 2vw,      4.25rem);    /* 36 → 68 */
+  --t-display: clamp(2.75rem,   1.9rem    + 4.25vw,   7rem);       /* 44 → 112 */
+
+  /* 헤딩 line-height는 1.0–1.15로 압축한다. 긴장은 주변 여백이 만든다. */
+  --lh-0: 1;
+  --lh-1: 1.06;
+  --lh-2: 1.15;
+  --lh-body: 1.6;
+  --lh-mono: 1.5;
+
+  --track-display: -0.03em;
+  --track-heading: -0.02em;
+  --track-body: -0.005em;
+  --track-mono: 0.12em;   /* 버튼 — 하드 룰 4 */
+  --track-label: 0.18em;  /* 섹션 라벨 — 더 넓게 */
+
+  /* --- 2.4 간격 — 8px 그리드 -------------------------------------------- */
+  --space-0: 0;
+  --space-05: 4px;  /* 광학 보정용 반 스텝. 레이아웃에는 쓰지 않는다. */
+  --space-1: 8px;
+  --space-2: 16px;
+  --space-3: 24px;
+  --space-4: 32px;
+  --space-5: 40px;
+  --space-6: 48px;
+  --space-7: 64px;
+  --space-8: 80px;
+  --space-9: 120px;
+  --space-10: 160px;
+
+  /* --- 2.5 레이아웃 ------------------------------------------------------ */
+  --container-max: 1200px;
+  --gutter: clamp(20px, 4vw, 48px);          /* 320px에서 20px 보장 */
+  --section-y: clamp(80px, 8vw, 160px);      /* 섹션 수직 패딩 80px 이상 */
+  --hair: 1px;
+  --tick: 6px;                                /* 코너 틱 길이 — 하드 룰 3 */
+  --tap-min: 44px;                            /* 최소 터치 타깃 */
+  --measure: 68ch;                            /* 본문 가독 폭 */
+
+  /* --- 2.6 레이어 -------------------------------------------------------- */
+  --z-below: -1;
+  --z-base: 0;
+  --z-raised: 10;
+  --z-sticky: 100;
+  --z-nav: 200;
+  --z-overlay: 300;
+  --z-modal: 400;
+  --z-toast: 500;
+  --z-skip: 900;
+
+  /* --- 2.8 모션 ---------------------------------------------------------- */
+  --dur-instant: 80ms;
+  --dur-fast: 140ms;
+  --dur-base: 220ms;
+  --dur-slow: 420ms;
+  --dur-scan: 900ms;      /* 스캔 리빌 */
+  --ease-out: cubic-bezier(0.2, 0.7, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --ease-step: steps(10, end);   /* HUD 계측 느낌의 이산 전이 */
+}
+
+/* ============================================================================
+   3. RESET + 전역 가드
+   ============================================================================ */
+
+/* 하드 룰 1 — border-radius: 0. 이 프로젝트에서 border-radius가 등장하는 유일한 지점.
+   !important는 실수를 물리적으로 막기 위한 가드다. */
+*,
+*::before,
+*::after {
+  border-radius: 0 !important;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+:where(html) {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  scroll-behavior: smooth;
+  scroll-padding-block-start: var(--space-8);
+}
+
+:where(body, h1, h2, h3, h4, h5, h6, p, figure, blockquote, dl, dd, ol, ul, hr, fieldset) {
+  margin: 0;
+  padding: 0;
+}
+
+:where(ul, ol)[role='list'] {
+  list-style: none;
+}
+
+:where(img, svg, video, canvas, picture) {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+:where(button, input, select, textarea) {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+}
+
+:where(button) {
+  cursor: pointer;
+}
+
+:where(a) {
+  color: inherit;
+  text-decoration: none;
+}
+
+:where(table) {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+:where(hr) {
+  border: none;
+}
+
+/* ============================================================================
+   4. BASE
+   ============================================================================ */
+body {
+  background-color: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-sans);
+  font-weight: var(--w-regular);
+  font-size: var(--t-base);
+  line-height: var(--lh-body);
+  letter-spacing: var(--track-body);
+  font-synthesis-weight: none;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  min-height: 100dvh;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  font-family: var(--font-sans);
+  /* 굵은 헤딩은 화면을 값싸게 만든다. 300 이 기본, 큰 것일수록 더 가늘게. */
+  font-weight: var(--w-light);
+  letter-spacing: var(--track-heading);
+  text-wrap: balance;
+}
+
+h1 {
+  font-size: var(--t-h1);
+  line-height: var(--lh-1);
+  font-weight: var(--w-thin);
+  letter-spacing: var(--track-display);
+}
+
+h2 {
+  font-size: var(--t-h2);
+  line-height: var(--lh-1);
+}
+
+h3 {
+  font-size: var(--t-h3);
+  line-height: var(--lh-2);
+}
+
+h4 {
+  font-size: var(--t-h4);
+  line-height: var(--lh-2);
+}
+
+p {
+  text-wrap: pretty;
+}
+
+code,
+kbd,
+samp,
+pre {
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+}
+
+::selection {
+  background-color: var(--select-bg);
+  color: var(--fg);
+}
+
+/* 한글 조판: 어절 단위로만 줄바꿈. 음절 중간에서 끊기면 읽기가 무너진다.
+   또 음수 트래킹은 한글에서 자간이 붙어 보이므로 거의 0으로 되돌린다.
+
+   **굵기도 한 단계 올린다.** 같은 font-weight 에서 한글은 라틴보다 훨씬 가늘어
+   보인다 — 한 글자당 획이 훨씬 많아 같은 획 굵기로도 글자 속공간이 먼저 메워지고,
+   상대적으로 획이 가늘게 지각되기 때문이다. 200(UltraLight)은 한글에서 거의
+   사라지고, 300(Light)은 본문 크기에서 읽기가 버겁다.
+
+   Apple SD Gothic Neo 는 가변 폰트가 아니라 100 단위로 끊긴 정적 패밀리라
+   350 같은 중간값을 주면 300 이나 400 으로 반올림된다 — 100 단위로만 올린다. */
+:lang(ko) {
+  word-break: keep-all;
+  overflow-wrap: break-word;
+  --w-thin: 300;   /* 200 → 300 */
+  --w-light: 400;  /* 300 → 400 */
+  --w-regular: 500;/* 400 → 500 — 본문. 여기가 "얇다"의 진원지였다 */
+  --w-medium: 600;
+}
+
+:lang(ko) :where(h1, h2, h3, h4, .t-display) {
+  letter-spacing: -0.005em;
+}
+
+/* 모노 계측 표기 안의 한글. 모노 글꼴에는 한글이 없어 본문 글꼴로 떨어지는데,
+   라틴 대문자용으로 잡은 넓은 트래킹(0.18em)이 그대로 걸리면 글자가 흩어진다. */
+.mono:lang(ko) {
+  letter-spacing: 0.04em;
+}
+
+/* ============================================================================
+   5. FOCUS — 시안 1px, 둥글지 않게 (하드 룰 1은 border-radius 가드가 이미 보장)
+   ============================================================================ */
+:focus-visible {
+  outline: var(--hair) solid var(--focus);
+  outline-offset: 2px;
+}
+
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* ============================================================================
+   6. UTILITIES
+   ============================================================================ */
+
+/* 최대폭 1200px, 좌우 거터 최소 20px — 320px에서도 안전 */
+.container {
+  width: 100%;
+  max-width: calc(var(--container-max) + var(--gutter) * 2);
+  margin-inline: auto;
+  padding-inline: var(--gutter);
+}
+
+.section {
+  padding-block: var(--section-y);
+}
+
+/* HUD 모노 캡션 — 번호·라벨·수치 */
+.mono {
+  font-family: var(--font-mono);
+  font-size: var(--t-mono-sm);
+  font-weight: var(--w-mono);
+  line-height: var(--lh-mono);
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+  font-variant-numeric: tabular-nums;
+  color: var(--fg-mute);
+}
+
+/* 하드 룰 6 — 섹션 구분선은 실선이 아니라 점선 스캔 라인.
+   1px 점의 반복을 gradient 없이 내는 가장 정직한 원시 요소는 dotted border다. */
+.scanline {
+  display: block;
+  inline-size: 100%;
+  block-size: 0;
+  border: none;
+  border-block-start: var(--hair) dotted var(--scan);
+}
+
+.scanline--hot {
+  border-block-start-color: var(--accent);
+}
+
+/* 실선 헤어라인 */
+.hairline {
+  display: block;
+  inline-size: 100%;
+  block-size: 0;
+  border: none;
+  border-block-start: var(--hair) solid var(--line);
+}
+
+.measure {
+  max-width: var(--measure);
+}
+
+/* ----------------------------------------------------------------------------
+   6.1 캔버스 위 본문의 가독성 — `data-quiet`
+
+   움직이는 점군 위에서 본문이 읽히지 않는 문제는 **CSS 로 풀지 않는다.**
+
+   한 번은 `backdrop-filter` 로 글 뒤를 뭉개는 판을 깔았다. 대비는 7.9:1 까지
+   올라갔지만 결과가 **프로스티드 글래스 카드**였다 — 네 변이 드러나고, 그 안이
+   바깥과 다른 재질이 되었다. 하드 룰 2(띄운 카드 금지)와 3(카드는 HudFrame)에
+   정면으로 어긋난다. 무엇보다 "빛나는 것은 캔버스뿐"이라는 전제가 깨진다.
+
+   그래서 가독성은 **캔버스가 직접** 만든다: `data-quiet` 가 붙은 요소의 화면 위
+   사각형을 `usePointCloud` 가 매 프레임 읽어, 그 안에 떨어지는 점의 알파를
+   부드럽게 떨어뜨린다(약 120px 에 걸쳐). 판도 테두리도 재질 변화도 없다 —
+   **그 자리에서 점이 성겨질 뿐이다.** LiDAR 로 스캔한 지도 위에 계측 문자를
+   얹으면 실제로 그렇게 보인다.
+
+   그래서 여기 CSS 에는 이 속성에 대한 스타일이 **없다.** 마크업 표식일 뿐이다.
+   계약은 AGENTS.md §배경 도로와 본문의 계약.
+   ---------------------------------------------------------------------------- */
+
+.t-display {
+  font-size: var(--t-display);
+  line-height: var(--lh-0);
+  letter-spacing: var(--track-display);
+  font-weight: var(--w-thin);
+}
+
+.t-lead {
+  font-size: var(--t-lg);
+  line-height: 1.45;
+  color: var(--fg-mute);
+}
+
+.visually-hidden {
+  position: absolute !important;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Skip link — 포커스 전에는 화면 밖, 포커스되면 좌상단에 HUD 태그로 착지한다. */
+.skip-link {
+  position: fixed;
+  inset-block-start: var(--space-1);
+  inset-inline-start: var(--space-1);
+  z-index: var(--z-skip);
+  padding: var(--space-1) var(--space-2);
+  background-color: var(--bg-raise);
+  border: var(--hair) solid var(--accent);
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: var(--t-mono-sm);
+  letter-spacing: var(--track-mono);
+  text-transform: uppercase;
+  transform: translateY(calc(-100% - var(--space-3)));
+  transition: transform var(--dur-fast) var(--ease-out);
+}
+
+.skip-link:focus-visible {
+  transform: translateY(0);
+}
+
+/* ============================================================================
+   7. TRANSPARENT HEADER — Base.astro 의 `transparentHeader` 계약 구현.
+   히어로 캔버스가 화면을 꽉 채우는 페이지에서는 헤더를 흐름에서 빼내 캔버스 위에
+   겹쳐 띄운다. 배경(--scrim)은 그대로 둔다 — 히어로 상단은 비어 있는 하늘(거의 검정)
+   이라 눈에 띄지 않고, 스크롤해 본문 위로 올라오면 평소처럼 글자를 받쳐 준다.
+   ============================================================================ */
+body[data-transparent-header='true'] > header {
+  position: fixed;
+  inset-block-start: 0;
+  inset-inline: 0;
+}
+
+/* ============================================================================
+   8. REDUCED MOTION — 토큰을 0으로 눌러 컴포넌트 전이까지 함께 멈춘다.
+   ============================================================================ */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-instant: 0.01ms;
+    --dur-fast: 0.01ms;
+    --dur-base: 0.01ms;
+    --dur-slow: 0.01ms;
+    --dur-scan: 0.01ms;
+  }
+
+  :where(html) {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    transition-delay: 0s !important;
+    animation-delay: 0s !important;
+  }
+}

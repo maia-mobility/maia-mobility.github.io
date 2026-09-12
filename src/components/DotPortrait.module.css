@@ -1,0 +1,136 @@
+.wrap {
+  position: relative;
+  inline-size: 100%;
+  max-inline-size: 190px;
+  background: var(--bg-raise);
+  border: var(--hair) solid var(--line);
+  overflow: hidden;
+  transition: border-color var(--dur-base) var(--ease-out);
+}
+
+.wrap:hover {
+  border-color: var(--line-hot);
+}
+
+/*
+  사진은 항상 DOM 에 있다 (JS 꺼짐·스크린리더·SEO).
+  캔버스가 해상을 마치면 사진이 그 자리를 이어받는다.
+
+  기본값이 `opacity: 1` 인 이유 — JS 가 꺼져 있으면 캔버스는 영영 그려지지 않는다.
+  그때 사진까지 투명하면 빈 상자만 남는다. 스크립트가 붙으면 캔버스가 사진을 가리므로
+  이중으로 보이지도 않는다.
+*/
+.photo {
+  display: block;
+  inline-size: 100%;
+  block-size: 100%;
+  object-fit: cover;
+  /*
+   * 컬러로 둔다. 흑백 인물 사진은 한국에서 영정사진으로 읽힌다.
+   * 무채색 UI 위에서 사람만 색을 갖는 것이 오히려 시선을 제자리로 모은다.
+   * 평소에는 아주 살짝 눌러 두고, 호버에서 완전히 살아난다.
+   */
+  filter: brightness(0.88) saturate(0.92);
+  transition:
+    opacity var(--dur-slow) var(--ease-out),
+    filter var(--dur-base) var(--ease-out);
+}
+
+/* 스크립트가 붙은 동안에는 캔버스가 그림을 맡는다 */
+.wrap[data-dot-active='true'] .photo {
+  opacity: 0;
+}
+
+.wrap[data-dot-active='true'][data-resolved='true'] .photo {
+  /* 점군이 도착한 뒤 사진이 올라온다 */
+  opacity: 1;
+  transition-delay: 0.15s;
+}
+
+.wrap:hover .photo,
+.wrap:focus-within .photo {
+  filter: brightness(1) saturate(1);
+}
+
+.canvas {
+  position: absolute;
+  inset: 0;
+  inline-size: 100%;
+  block-size: 100%;
+  pointer-events: none;
+}
+
+/* 해상이 끝나면 캔버스는 물러난다 */
+.wrap[data-resolved='true'] .canvas {
+  opacity: 0;
+  transition: opacity var(--dur-slow) var(--ease-out);
+  transition-delay: 0.35s;
+}
+
+/* 검출 라벨 칩 — 각진 1px, hover 에서만 */
+.chip {
+  position: absolute;
+  inset-block-start: var(--space-1);
+  inset-inline-start: var(--space-1);
+  font-family: var(--font-mono);
+  font-size: var(--t-micro);
+  letter-spacing: var(--track-mono);
+  color: var(--accent);
+  background: var(--bg);
+  border: var(--hair) solid var(--accent);
+  padding: 1px 4px;
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease-out);
+}
+
+.wrap:hover .chip,
+.wrap:focus-within .chip {
+  opacity: 1;
+}
+
+/* 바운딩 박스 코너 브래킷 */
+.bracket {
+  position: absolute;
+  inset: 5px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease-out);
+}
+
+.bracket::before,
+.bracket::after {
+  content: '';
+  position: absolute;
+  inline-size: 10px;
+  block-size: 10px;
+  border-color: var(--accent);
+  border-style: solid;
+}
+
+.bracket::before {
+  inset-block-start: 0;
+  inset-inline-start: 0;
+  border-width: var(--hair) 0 0 var(--hair);
+}
+
+.bracket::after {
+  inset-block-end: 0;
+  inset-inline-end: 0;
+  border-width: 0 var(--hair) var(--hair) 0;
+}
+
+.wrap:hover .bracket,
+.wrap:focus-within .bracket {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .photo {
+    opacity: 1;
+    transition-delay: 0s;
+  }
+
+  .canvas {
+    opacity: 0;
+  }
+}

@@ -1,0 +1,16 @@
+# build output
+dist/
+.astro/
+
+# deps
+node_modules/
+
+# 기존 Wix 사이트에서 받은 AI 생성 스톡 이미지 — 쓰지 않고 보관만 한다
+_archive/
+
+# env
+.env
+.env.production
+
+# macOS
+.DS_Store

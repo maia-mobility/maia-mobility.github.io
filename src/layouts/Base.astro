@@ -1,0 +1,98 @@
+---
+import '../styles/global.css';
+import { alternates, htmlLang, href, pick, type Lang } from '../i18n';
+import { META, UI } from '../i18n/ui';
+import { SITE } from '../data/site';
+
+interface Props {
+  lang: Lang;
+  /** i18n/ui.ts 의 META 키 (''=home, 'research', …). */
+  page: string;
+  /** META 를 덮어쓰고 싶을 때. */
+  title?: string;
+  description?: string;
+  /** 히어로가 있는 페이지는 헤더를 캔버스 위에 겹쳐 띄운다. */
+  transparentHeader?: boolean;
+}
+
+const { lang, page, title, description, transparentHeader = false } = Astro.props;
+
+const meta = META[page] ?? META[''];
+const pageTitle = title ?? pick(meta.title, lang);
+const pageDesc = description ?? pick(meta.description, lang);
+
+const siteName = pick(SITE.name, lang);
+// 홈은 "MAIA Lab — 태그라인", 나머지는 "제목 · MAIA Lab"
+const fullTitle = page === '' ? `${siteName} — ${pick(SITE.tagline, lang)}` : `${pageTitle} · ${siteName}`;
+
+const canonical = new URL(Astro.url.pathname, Astro.site);
+const alts = alternates(Astro.url.pathname);
+
+const ogImage = new URL('/og/cover.png', Astro.site);
+---
+
+<!doctype html>
+<html lang={htmlLang(lang)} data-page={page || 'home'}>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+
+    <title>{fullTitle}</title>
+    <meta name="description" content={pageDesc} />
+    <link rel="canonical" href={canonical.href} />
+
+    {
+      alts.map((a) => (
+        <link rel="alternate" hreflang={a.hreflang} href={new URL(a.path, Astro.site).href} />
+      ))
+    }
+    <link rel="alternate" hreflang="x-default" href={new URL(href(page, 'en'), Astro.site).href} />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content={siteName} />
+    <meta property="og:title" content={fullTitle} />
+    <meta property="og:description" content={pageDesc} />
+    <meta property="og:url" content={canonical.href} />
+    <meta property="og:image" content={ogImage.href} />
+    <meta property="og:locale" content={lang === 'ko' ? 'ko_KR' : 'en_US'} />
+    <meta name="twitter:card" content="summary_large_image" />
+
+    <meta name="theme-color" content={SITE.themeColor} />
+
+    <!-- 연구실 = 조직. 검색엔진이 소속·연락처를 구조화해서 읽게 한다. -->
+    <script
+      type="application/ld+json"
+      is:inline
+      set:html={JSON.stringify({
+        '@context': 'https://schema.org',
+        '@type': 'ResearchOrganization',
+        name: `${SITE.name.en} (${SITE.expansion.en})`,
+        url: Astro.site?.href,
+        parentOrganization: { '@type': 'CollegeOrUniversity', name: SITE.university.en },
+        email: SITE.contact.email,
+        telephone: SITE.contact.office,
+        address: {
+          '@type': 'PostalAddress',
+          streetAddress: '116 Myongji-ro, Cheoin-gu',
+          addressLocality: 'Yongin-si',
+          addressRegion: 'Gyeonggi-do',
+          postalCode: '17058',
+          addressCountry: 'KR',
+        },
+      })}
+    />
+  </head>
+
+  <body data-transparent-header={transparentHeader ? 'true' : undefined}>
+    <a class="skip-link" href="#main">{pick(UI.skipToContent, lang)}</a>
+
+    <slot name="header" />
+
+    <main id="main" tabindex="-1">
+      <slot />
+    </main>
+
+    <slot name="footer" />
+  </body>
+</html>
