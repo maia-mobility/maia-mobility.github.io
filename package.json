@@ -10,7 +10,7 @@
     "build": "astro build",
     "preview": "astro preview",
     "astro": "astro",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "astro sync && tsc --noEmit",
     "audit": "node scripts/audit.mjs",
     "verify": "npm run typecheck && npm run lint:design && npm run build && npm run audit && npm run stage:check",
     "lint:design": "node scripts/lint-design.mjs",
