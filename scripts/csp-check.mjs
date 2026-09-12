@@ -97,14 +97,19 @@ const deck = await page.evaluate(() => {
   const ticks = [...document.querySelectorAll('.ticks a')];
   return {
     k: ticks.map((a) => getComputedStyle(a).getPropertyValue('--k').trim()),
-    scale: ticks.map((a) => getComputedStyle(a, '::after').transform),
+    /* `matrix(a, b, c, d, tx, ty)` 의 a 가 scaleX 다. **문자열로 비교하지 마라** —
+       `matrix(0.999, …)` 가 `'matrix(0'` 으로 시작해서, 거의 다 채워진 칸을
+       비었다고 읽는다(실제로 그렇게 잘못 읽었다). 숫자로 꺼내 쓴다. */
+    scaleX: ticks.map((a) => {
+      const m = getComputedStyle(a, '::after').transform.match(/matrix\(([-\d.]+)/);
+      return m ? Number(m[1]) : 1;
+    }),
   };
 });
-// 현재 칸만 채워져 있어야 한다 — 넷 다 차 있으면 인라인 style 이 막힌 것이다
-const filled = deck.scale.filter((t) => !t.startsWith('matrix(0')).length;
+const filled = deck.scaleX.filter((v) => v > 0.5).length;
 say(
   deck.k.every((v) => v !== '') && filled === 1,
-  `위치 눈금이 현재 칸만 가리킨다 (채워진 칸 ${filled}/4 · --k=[${deck.k.join(', ')}])`,
+  `위치 눈금이 현재 칸만 가리킨다 (채워짐 [${deck.scaleX.map((v) => v.toFixed(2)).join(' ')}] · --k=[${deck.k.join(', ')}])`,
 );
 
 const portrait = await page.evaluate(async () => {
