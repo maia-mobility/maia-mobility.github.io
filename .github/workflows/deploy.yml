@@ -2,11 +2,16 @@
 #
 # 쓰기 전에 할 일:
 #   1. 저장소 Settings → Pages → Source 를 "GitHub Actions" 로 바꾼다
-#   2. 아래 SITE_URL 을 실제 주소로 바꾼다
-#      - 사용자/조직 페이지: https://<계정>.github.io
-#      - 프로젝트 페이지:   https://<계정>.github.io/<저장소>
-#        (이 경우 astro.config.mjs 에 base: '/<저장소>' 도 추가해야 한다)
-#   3. 학교 도메인을 쓴다면 SITE_URL 만 바꾸고 public/CNAME 파일을 추가한다
+#   2. 저장소 Settings → Secrets and variables → Actions → Variables 에
+#      **SITE_URL** 을 넣는다. canonical·OG·sitemap·hreflang 이 전부 이 값을 쓴다.
+#      - 계정 페이지:     https://<계정>.github.io
+#      - 프로젝트 저장소: https://<계정>.github.io/<저장소>
+#   3. **프로젝트 저장소라면 BASE_PATH 변수도 넣는다** (예: /maia-lab).
+#      사이트가 도메인 루트가 아니라 하위 경로에 놓이므로, 이 값이 없으면 링크와
+#      이미지가 전부 사이트 밖(/people, /images/...)을 가리켜 404 가 된다.
+#      계정 페이지·커스텀 도메인이면 비워 둔다.
+#   4. 학교 도메인을 쓴다면 SITE_URL 만 바꾸고 public/CNAME 파일을 추가한다
+#      (이때 BASE_PATH 는 비운다 — 도메인 루트에 놓이므로)
 name: Deploy
 
 on:
@@ -44,6 +49,7 @@ jobs:
         run: npm run build
         env:
           SITE_URL: ${{ vars.SITE_URL || 'https://example.github.io' }}
+          BASE_PATH: ${{ vars.BASE_PATH }}
 
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3

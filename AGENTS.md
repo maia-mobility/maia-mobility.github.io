@@ -322,6 +322,39 @@ npm run verify      # 타입검사 → 디자인 하드 룰 → 빌드 → 브�
 - **`stage:check` 는 한 패널에 13초씩 머문다.** 짧게 잡지 마라 — 연출 한 바퀴가 11초라
   그보다 빨리 넘기면 승객이 타기도 전에 다음 패널로 간다. 연출이 없는 게 아니라 덜 본 것이다.
 
+## 배포
+
+정적 산출물이라 어디든 올라가지만, **도메인 루트에 놓이는지 하위 경로에 놓이는지**가
+코드에 영향을 준다.
+
+| 호스팅 | `SITE_URL` | `BASE_PATH` |
+|---|---|---|
+| GitHub Pages · 계정 페이지 | `https://<계정>.github.io` | 비움 |
+| GitHub Pages · 프로젝트 저장소 | `https://<계정>.github.io/<저장소>` | `/<저장소>` |
+| Cloudflare Pages · Netlify | `https://<프로젝트>.pages.dev` | 비움 |
+| 학교 도메인 | `https://maia.mju.ac.kr` | 비움 (+ `public/CNAME`) |
+
+둘 다 GitHub 저장소 변수(Settings → Secrets and variables → Actions → Variables)로
+넣는다. 워크플로가 빌드 환경변수로 넘긴다.
+
+**하위 경로 배포에서 링크가 깨지지 않게 하는 것은 `src/i18n/index.ts` 세 함수다.**
+
+- `href()` · `asset()` — 주소를 **만들 때** base 를 붙인다
+- `stripBase()` — 주소를 **읽을 때** base 를 뗀다 (`langFromPath`·`routeKey` 가 먼저 거친다)
+
+이 둘은 **짝이다.** 한쪽만 고치면 언어 토글이 자기 자신을 가리키거나 404 로 간다.
+새 링크를 만들 때 `/publications` 같은 문자열을 직접 쓰지 말고 반드시 `href()` 를,
+`public/` 자산은 `asset()` 을 거친다. 확인은 빌드로 한다:
+
+```bash
+BASE_PATH=/maia-lab SITE_URL=https://example.github.io/maia-lab npm run build
+grep -oE 'href="/[^"]*"' dist/ko/people/index.html | sort -u   # 전부 /maia-lab/ 로 시작해야 한다
+npm run build                                                   # 끝나면 루트로 되돌린다
+```
+
+공개 페이지에는 **기관 연락처만** 싣는다. 기존 Wix 사이트의 개인 휴대번호가 푸터에
+그대로 옮겨져 있었고 뺐다 — 정적 사이트는 통째로 긁히므로 한 번 공개되면 되돌릴 수 없다.
+
 ## 참고
 
 - 디자인 템플릿 54종: `~/.claude/skills/popular-web-designs/templates/`

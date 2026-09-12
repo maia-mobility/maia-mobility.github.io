@@ -1,4 +1,5 @@
 import s from './DotPortrait.module.css';
+import { asset } from '../i18n';
 
 export interface DotPortraitProps {
   src: string;
@@ -28,6 +29,9 @@ export default function DotPortrait({
   height,
   className,
 }: DotPortraitProps) {
+  /* `public/` 자산이라 하위 경로 배포에서는 base 가 앞에 붙어야 한다.
+     여기 한 곳에서 붙이면 <img> 와 캔버스가 읽는 data-src 가 함께 맞는다. */
+  const url = asset(src);
   return (
     <div
       data-dot-wrap
@@ -36,7 +40,7 @@ export default function DotPortrait({
     >
       <img
         className={s.photo}
-        src={src}
+        src={url}
         alt={alt}
         width={width}
         height={height}
@@ -44,7 +48,7 @@ export default function DotPortrait({
         decoding="async"
       />
 
-      <canvas data-dot-portrait data-src={src} className={s.canvas} aria-hidden="true" />
+      <canvas data-dot-portrait data-src={url} className={s.canvas} aria-hidden="true" />
 
       {label && (
         <span className={s.chip} aria-hidden="true">

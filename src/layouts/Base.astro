@@ -1,6 +1,6 @@
 ---
 import '../styles/global.css';
-import { alternates, htmlLang, href, pick, type Lang } from '../i18n';
+import { alternates, asset, htmlLang, href, pick, type Lang } from '../i18n';
 import { META, UI } from '../i18n/ui';
 import { SITE } from '../data/site';
 
@@ -28,7 +28,7 @@ const fullTitle = page === '' ? `${siteName} — ${pick(SITE.tagline, lang)}` : 
 const canonical = new URL(Astro.url.pathname, Astro.site);
 const alts = alternates(Astro.url.pathname);
 
-const ogImage = new URL('/og/cover.png', Astro.site);
+const ogImage = new URL(asset('/og/cover.png'), Astro.site);
 ---
 
 <!doctype html>
@@ -36,7 +36,7 @@ const ogImage = new URL('/og/cover.png', Astro.site);
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href={asset('/favicon.svg')} type="image/svg+xml" />
 
     <title>{fullTitle}</title>
     <meta name="description" content={pageDesc} />
