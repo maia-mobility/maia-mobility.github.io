@@ -1,146 +1,193 @@
+/*
+ * 푸터 — 페이지를 닫는 줄.
+ *
+ * 3열 사이트맵을 걷어냈다. 남은 것은 둘이다:
+ *   ① 연락 블록 — 이름 · 확장명 · 주소 · 메일 · 대표번호 (홈에서는 접힌다)
+ *   ② 닫는 줄   — 메뉴 한 줄 + 저작권
+ *
+ * 본문 기둥은 다섯 페이지와 같은 축(왼쪽)에 붙는다. 가운데 정렬하면 푸터만
+ * 다른 축에 서서, 페이지가 끝나는 자리에서 눈이 한 번 더 움직인다.
+ */
+
 .footer {
-  border-top: var(--hair) dotted var(--scan);
-  margin-top: var(--section-y);
-  padding-block: var(--space-7) var(--space-5);
+  margin-block-start: var(--space-8);
+  padding-block: var(--space-6) var(--space-5);
+  border-block-start: var(--hair) dotted var(--scan);
 }
 
 .inner {
-  max-width: var(--container-max);
-  margin-inline: auto;
+  inline-size: min(100%, 68rem);
   padding-inline: var(--gutter);
   display: grid;
   gap: var(--space-6);
 }
 
-/* ── 상단 ─────────────────────────────────────────── */
+/* ── 연락 블록 ──────────────────────────────────────────────────────────
+   홈에서는 접힌다 — 바로 위 닫는 구역이 같은 주소와 메일을 더 크게 보여 준다.
+   `<html data-page>` 는 Base.astro 가 쓴다. Footer 는 lang 말고 아무것도 받지
+   않으므로, 레이아웃을 고치지 않고 이 한 줄로 판단한다. */
 
-.lead {
+.reach {
   display: grid;
-  gap: var(--space-2);
+  justify-items: start;
+  gap: var(--space-1);
+}
+
+:global(html[data-page='home']) .reach {
+  display: none;
+}
+
+/* 연락 블록이 접히면 닫는 줄이 푸터의 첫 덩이가 된다 — 푸터 자신의 스캔 라인이
+   이미 그 자리를 열었으므로 안쪽 선을 지운다. 두 줄이 48px 간격으로 겹쳤다. */
+:global(html[data-page='home']) .base {
+  padding-block-start: 0;
+  border-block-start: none;
 }
 
 .mark {
-  font-family: var(--font-sans);
-  font-size: var(--t-h2);
-  font-weight: var(--w-thin);
-  letter-spacing: var(--track-display);
-  line-height: var(--lh-0);
-  color: var(--fg);
   margin: 0;
+  font-family: var(--font-sans);
+  font-size: var(--t-h4);
+  font-weight: var(--w-light);
+  line-height: 1;
+  letter-spacing: -0.03em;
+  color: var(--fg);
 }
 
 .expand {
+  margin: 0;
   font-family: var(--font-mono);
   font-size: var(--t-micro);
-  letter-spacing: var(--track-label);
-  text-transform: uppercase;
+  line-height: var(--lh-mono);
+  letter-spacing: var(--track-mono);
   color: var(--fg-mute);
-  margin: 0;
 }
 
-.recruit {
-  max-width: var(--measure);
+/* 주소와 연락처는 한 덩어리다 — 같은 장소를 가리키는 두 줄이라서. */
+.where {
+  margin-block-start: var(--space-3);
+  display: grid;
+  gap: var(--space-1);
+  font-style: normal;
+  max-inline-size: 46ch;
   font-size: var(--t-sm);
   line-height: var(--lh-body);
   color: var(--fg-mute);
-  margin: var(--space-2) 0 0;
+  text-wrap: pretty;
 }
 
-/* ── 3열 ──────────────────────────────────────────── */
-
-.cols {
-  display: grid;
-  gap: var(--space-5);
-  padding-top: var(--space-5);
-  border-top: var(--hair) solid var(--line);
+.lines {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 var(--space-3);
 }
 
-.col {
-  display: grid;
-  gap: var(--space-2);
-  align-content: start;
-}
-
-.colHead {
-  font-family: var(--font-mono);
-  font-size: var(--t-micro);
-  font-weight: var(--w-mono);
-  letter-spacing: var(--track-label);
-  text-transform: uppercase;
-  color: var(--fg-dim);
-  margin: 0;
-}
-
-.items {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  gap: var(--space-1);
-}
-
-.mailto,
-.tel,
-.navLink {
-  display: inline-flex;
-  align-items: baseline;
-  gap: var(--space-2);
-  text-decoration: none;
-  font-size: var(--t-sm);
-  color: var(--fg);
-  transition: color var(--dur-fast) var(--ease-out);
-}
-
-.mailto,
-.tel {
+.mailto {
+  position: relative;
   font-family: var(--font-mono);
   font-size: var(--t-mono-sm);
   letter-spacing: var(--track-mono);
+  color: var(--fg);
+  text-decoration: none;
+  border-block-end: var(--hair) solid var(--line);
+  transition: border-color var(--dur-fast) var(--ease-out);
 }
 
 .mailto:hover,
-.tel:hover,
-.navLink:hover {
-  color: var(--accent);
+.mailto:focus-visible {
+  border-block-end-color: var(--accent);
 }
 
-.navIndex {
-  font-family: var(--font-mono);
-  font-size: var(--t-micro);
-  color: var(--fg-dim);
+/* 손가락 과녁 44px. 여백으로 키우면 기준선이 밀리고 밑줄이 글자에서 떨어지므로,
+   자리를 차지하지 않는 겹침 상자로 키운다(모서리 색인과 같은 규칙). */
+@media (pointer: coarse) {
+  .mailto::after {
+    content: '';
+    position: absolute;
+    inset: 50% 0 auto;
+    block-size: var(--tap-min);
+    inline-size: 100%;
+    min-inline-size: var(--tap-min);
+    translate: 0 -50%;
+  }
 }
 
-.address {
-  font-style: normal;
-  font-size: var(--t-sm);
-  line-height: var(--lh-body);
-  color: var(--fg-mute);
-  max-width: 34ch;
+/* ── 닫는 줄 ───────────────────────────────────────────────────────────── */
+
+.base {
+  display: grid;
+  gap: var(--space-3);
+  padding-block-start: var(--space-4);
+  border-block-start: var(--hair) dotted var(--scan);
 }
 
-/* ── 하단 ─────────────────────────────────────────── */
-
-.colophon {
+/* 색인과 같은 어휘 — 열로 쌓지 않고 한 줄. 지금 페이지 표시는 하지 않는다
+   (모서리 색인이 이미 한다. 여기서 한 번 더 하면 표식이 둘이 된다). */
+.links {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-1);
-  padding-top: var(--space-4);
-  border-top: var(--hair) solid var(--line);
+  gap: var(--space-1) var(--space-3);
   font-family: var(--font-mono);
   font-size: var(--t-micro);
-  letter-spacing: var(--track-label);
-  color: var(--fg-dim);
+  letter-spacing: var(--track-mono);
+}
+
+.links a {
+  position: relative;
+  color: var(--fg-mute);
+  text-decoration: none;
+  transition: color var(--dur-fast) var(--ease-out);
+}
+
+.links a:hover,
+.links a:focus-visible {
+  color: var(--fg);
+}
+
+/* 손가락으로 누르는 기기에서만 과녁을 44px 로 넓힌다. 여백으로 키우면 기준선이
+   밀리므로 자리를 차지하지 않는 겹침 상자로 키운다(모서리 색인과 같은 규칙). */
+@media (pointer: coarse) {
+  /* 줄 간격은 과녁 높이보다 커야 한다. 16px 이었을 때 줄 간격이 32px 라
+     44px 짜리 과녁 둘이 12px 씩 겹쳐, 경계에서 누르면 엉뚱한 줄이 잡혔다. */
+  .links {
+    gap: var(--space-4) var(--space-3);
+  }
+
+  .links a::after {
+    content: '';
+    position: absolute;
+    inset: 50% 0 auto;
+    block-size: var(--tap-min);
+    inline-size: 100%;
+    min-inline-size: var(--tap-min);
+    translate: 0 -50%;
+  }
+}
+
+.colophon {
   margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 0.5em;
+  font-family: var(--font-mono);
+  font-size: var(--t-micro);
+  line-height: var(--lh-mono);
+  letter-spacing: var(--track-mono);
+  color: var(--fg-dim);
+  font-variant-numeric: tabular-nums;
 }
 
 .dot {
   color: var(--line-hot);
 }
 
-@media (min-width: 45rem) {
-  .cols {
-    grid-template-columns: repeat(3, 1fr);
-    gap: var(--space-6);
+/* 넓은 화면에서는 닫는 줄이 **한 줄**이다 — 메뉴가 왼쪽, 저작권이 오른쪽.
+   좁아지면 위아래로 접힌다(위가 메뉴, 아래가 저작권). */
+@media (min-width: 48rem) {
+  .base {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: baseline;
+    gap: var(--space-4);
   }
 }

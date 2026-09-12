@@ -1,0 +1,226 @@
+---
+/*
+ * 모서리 색인 — 내비바를 대신한다.
+ *
+ * 예전 내비바는 화면 위를 가로지르는 **띠**였다. 그 띠가 있는 한 이 사이트는
+ * "배경 위에 얹힌 문서"가 아니라 "머리말이 달린 웹앱"으로 읽혔고, 배경 도로가
+ * 첫 화면에서 잘려 나갔다. 지금은 한 줄이다 — 이름 · 갈 곳들 · 언어.
+ *
+ *   · **정적이다.** `client:` 지시어가 없다. 링크는 평범한 `<a>` 라 JS 가 꺼져도
+ *     전부 동작한다. 아래의 작은 스크립트는 **내려갈 때 비키는 것**만 한다.
+ *   · 지금 페이지는 `▸` 로 표시한다. 색만으로 알리지 않는다(색각 이상 대비).
+ *   · 좁은 화면에서는 두 줄이 된다 — 390px 에서 한 줄은 여유가 정확히 0px 이었고
+ *     320px 에서는 `EN / KO` 만 아랫줄로 떨어져 나갔다.
+ *
+ * `data-quiet` 가 붙어 있다 — 배경 점군이 이 줄 아래에서 성겨진다(CLAUDE.md
+ * 의 "배경 도로와 본문의 계약" 참조). 판을 깔지 않는다.
+ */
+import { href, pick, routeKey, type Lang } from '../i18n';
+import { NAV, UI, LANG_LABEL } from '../i18n/ui';
+import { SITE } from '../data/site';
+import { LANGS } from '../i18n';
+
+interface Props {
+  lang: Lang;
+  pathname: string;
+}
+const { lang, pathname } = Astro.props;
+
+const here = routeKey(pathname);
+/** 홈은 이름표(MAIA)가 이미 가리키므로 목록에서 뺀다. */
+const items = NAV.filter((n) => n.key !== '');
+---
+
+<nav class="corner" aria-label={pick(UI.menu, lang)} data-idx data-quiet>
+  <a class="mark" href={href('', lang)} aria-current={here === '' ? 'page' : undefined}>
+    {SITE.short}
+  </a>
+
+  {/*
+    넓은 화면에서는 `display: contents` 라 이 상자가 없는 것과 같다.
+    좁은 화면에서만 상자가 되어 링크 전부를 통째로 아랫줄로 내린다.
+  */}
+  <span class="links">
+    {items.map((item) => (
+      <a
+        href={href(item.key, lang)}
+        class={item.key === here ? 'at' : undefined}
+        aria-current={item.key === here ? 'page' : undefined}
+      >
+        {pick(item.label, lang)}
+      </a>
+    ))}
+  </span>
+
+  <span class="lang">
+    {LANGS.map((l, i) => (
+      <a
+        href={href(here, l)}
+        class={l === lang ? 'on' : 'off'}
+        hreflang={l}
+        lang={l}
+        aria-current={l === lang ? 'true' : undefined}
+      >
+        {i > 0 ? <span class="sep" aria-hidden="true">/ </span> : null}{LANG_LABEL[l]}
+      </a>
+    ))}
+  </span>
+</nav>
+
+<script>
+  /*
+   * 색인은 **내려갈 때 비킨다.**
+   *
+   * 고정된 한 줄 아래로 본문이 그대로 지나가므로, 논문 목록처럼 한 화면보다 긴
+   * 구역에서는 색인과 제목이 겹친다(연도 "2020" 위에 "MAIA" 가 얹힌 것을 봤다).
+   * 판을 깔아 가리는 것은 이 사이트에서 금지고, 자리를 비워 두자니 화면 하나를
+   * 통째로 버린다. 내려갈 때는 읽는 중이니 비키고, 올라갈 때는 찾는 중이니 선다.
+   *
+   * 리스너는 scrollY 만 읽고(레이아웃 강제 없음) rAF 한 번으로 코얼레싱한다.
+   */
+  const nav = document.querySelector('[data-idx]');
+  if (nav) {
+    let lastY = window.scrollY;
+    let queued = false;
+    addEventListener(
+      'scroll',
+      () => {
+        if (queued) return;
+        queued = true;
+        requestAnimationFrame(() => {
+          queued = false;
+          const y = window.scrollY;
+          const down = y > lastY + 2;
+          const up = y < lastY - 2;
+          if (down || up) lastY = y;
+          if (y < window.innerHeight * 0.5) nav.classList.remove('away');
+          else if (down) nav.classList.add('away');
+          else if (up) nav.classList.remove('away');
+        });
+      },
+      { passive: true },
+    );
+  }
+</script>
+
+<style>
+  .corner {
+    position: fixed;
+    inset-block-start: var(--space-3);
+    inset-inline: var(--gutter);
+    z-index: var(--z-nav);
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-3);
+    font-family: var(--font-mono);
+    font-size: var(--t-micro);
+    letter-spacing: var(--track-mono);
+    transition:
+      opacity 220ms linear,
+      translate 220ms ease;
+  }
+  .corner.away {
+    opacity: 0;
+    translate: 0 -0.8rem;
+    pointer-events: none;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .corner {
+      transition: none;
+    }
+  }
+
+  .mark {
+    margin-inline-end: auto;
+    font-family: var(--font-sans);
+    font-size: var(--t-base);
+    letter-spacing: -0.02em;
+    color: var(--fg);
+    text-decoration: none;
+  }
+
+  /* 넓은 화면에서는 없는 상자다 — 항목들이 .corner 의 flex 자식이 된다. */
+  .links {
+    display: contents;
+  }
+
+  .corner a {
+    color: var(--fg-dim);
+    text-decoration: none;
+    transition: color 160ms linear;
+    /* 손가락으로 누르는 자리를 넓힌다. 여백으로 키우면 기준선이 밀리므로
+       레이아웃 비용이 없는 겹침 상자로 키운다. */
+    position: relative;
+  }
+  @media (pointer: coarse) {
+    .corner a::after {
+      content: '';
+      position: absolute;
+      inset: 50% 0 auto;
+      block-size: var(--tap-min);
+      inline-size: 100%;
+      min-inline-size: var(--tap-min);
+      translate: 0 -50%;
+    }
+  }
+  .corner a:hover,
+  .corner a:focus-visible {
+    color: var(--fg);
+  }
+  .mark:hover,
+  .mark:focus-visible {
+    color: var(--accent);
+  }
+
+  /* 지금 페이지. 밑줄이 아니라 앞의 표식으로 알린다 — 줄이 하나 더 생기지 않는다. */
+  .corner a.at {
+    color: var(--fg);
+  }
+  .corner a.at::before {
+    content: '▸';
+    margin-inline-end: 0.35em;
+    color: var(--accent);
+  }
+
+  .lang {
+    display: inline-flex;
+    gap: 0.5em;
+    color: var(--fg-dim);
+  }
+  .lang a.on {
+    color: var(--fg);
+  }
+  .lang a.off {
+    color: var(--fg-dim);
+  }
+  .lang .sep {
+    color: var(--line-hot);
+  }
+
+  .sr {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  /* 좁은 화면 — 두 줄. 390px 에서 한 줄은 여유가 정확히 0px 이었다. */
+  @media (max-width: 34rem) {
+    .corner {
+      flex-wrap: wrap;
+      gap: var(--space-2) var(--space-3);
+    }
+    .links {
+      display: flex;
+      /* 다섯 항목이 한 줄에 안 들어가면 **접힌다.** 영문 `Research People
+         Publications Teaching News` 는 390px 에서 391px 이라 `News` 가 1px
+         잘렸다(한글은 짧아 안 넘쳤다). 자르느니 두 줄이 낫다. */
+      flex-wrap: wrap;
+      flex-basis: 100%;
+      order: 1;
+      gap: var(--space-1) var(--space-3);
+    }
+  }
+</style>

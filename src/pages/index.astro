@@ -1,13 +1,16 @@
 ---
-// 홈.
-//   ① 히어로 — LiDAR 포인트클라우드 (사이트의 첫 화면, 유일한 client:load 아일랜드)
-//   ② 본문   — HomeBody (미션 · 연구분야 · 소식 · 함께하기)
+/*
+ * 홈 (영문).
+ *
+ * 첫 화면부터 마지막 주소까지 **배경 도로 한 장 위**에 얹힌다. 캔버스는 여기서
+ * 직접 깔고(`Page` 에는 `ownsCanvas` 로 알린다), 본문은 `HomeBody` 가 맡는다.
+ */
 import Page from '../layouts/Page.astro';
-import PointCloudHero from '../components/PointCloudHero.tsx';
+import RoadCanvas from '../components/RoadCanvas';
 import HomeBody from '../sections/HomeBody.astro';
 ---
 
-<Page lang="en" page="" transparentHeader={true}>
-  <PointCloudHero client:load lang="en" />
+<Page lang="en" page="" ownsCanvas={true}>
+  <RoadCanvas client:load />
   <HomeBody lang="en" />
 </Page>

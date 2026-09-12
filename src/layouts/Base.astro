@@ -12,10 +12,11 @@ interface Props {
   title?: string;
   description?: string;
   /** 히어로가 있는 페이지는 헤더를 캔버스 위에 겹쳐 띄운다. */
-  transparentHeader?: boolean;
+  /** 검색엔진에 올리지 않는다(프로토타입 등). sitemap 에서도 빠져야 한다. */
+  noindex?: boolean;
 }
 
-const { lang, page, title, description, transparentHeader = false } = Astro.props;
+const { lang, page, title, description, noindex = false } = Astro.props;
 
 const meta = META[page] ?? META[''];
 const pageTitle = title ?? pick(meta.title, lang);
@@ -59,6 +60,7 @@ const ogImage = new URL(asset('/og/cover.png'), Astro.site);
     <meta name="twitter:card" content="summary_large_image" />
 
     <meta name="theme-color" content={SITE.themeColor} />
+    {noindex ? <meta name="robots" content="noindex, nofollow" /> : null}
 
     <!-- 연구실 = 조직. 검색엔진이 소속·연락처를 구조화해서 읽게 한다. -->
     <script
@@ -84,7 +86,7 @@ const ogImage = new URL(asset('/og/cover.png'), Astro.site);
     />
   </head>
 
-  <body data-transparent-header={transparentHeader ? 'true' : undefined}>
+  <body>
     <a class="skip-link" href="#main">{pick(UI.skipToContent, lang)}</a>
 
     <slot name="header" />

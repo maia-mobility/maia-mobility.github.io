@@ -1,4 +1,4 @@
-import { useRef, type RefObject } from 'react';
+import { useEffect, useRef, type RefObject } from 'react';
 import { useCanvas2D, type Canvas2DView } from './useCanvas2D';
 import { useRafLoop } from './useRafLoop';
 import {
@@ -278,7 +278,7 @@ function buildScene(budget: number): Scene {
 
   /* --- ① 노면 산란 (원경) -------------------------------------------- */
   // 근거리는 RelLayer 가 맡으므로 여기서는 먼 노면만 담당한다.
-  const surfaceN = hi ? 1700 : 520;
+  const surfaceN = hi ? 2900 : 1400;
   for (let i = 0; i < surfaceN; i++) {
     const z = rnd() * SCENE_LEN;
     const side = rnd() < 0.5 ? -1 : 1;
@@ -293,7 +293,7 @@ function buildScene(budget: number): Scene {
   /* --- ①b 보도 · 노변 지반 ------------------------------------------- */
   // 차도 바깥의 지반 반사. 실제 MMS 스캔에서 가장 넓게 깔리는 층이고,
   // 화면에서는 프레임 좌우 끝을 채워 도로가 "띠"가 아니라 "면"으로 읽히게 한다.
-  const vergeN = hi ? 700 : 190;
+  const vergeN = hi ? 1200 : 520;
   for (let i = 0; i < vergeN; i++) {
     const z = rnd() * SCENE_LEN;
     const side = rnd() < 0.5 ? -1 : 1;
@@ -306,7 +306,7 @@ function buildScene(budget: number): Scene {
 
   /* --- ② 차선 도색 -------------------------------------------------- */
   // 0.4m 간격(데스크톱). 실선은 끊김 없이, 파선은 3m 도색 / 5m 공백으로 또렷하게.
-  const paintStep = hi ? 0.4 : 0.8;
+  const paintStep = hi ? 0.26 : 0.45;
   for (const ln of LANE_LINES) {
     for (let z = 0; z < SCENE_LEN; z += paintStep) {
       if (ln.dashed && z % DASH_PERIOD > DASH_ON) continue;
@@ -318,7 +318,7 @@ function buildScene(budget: number): Scene {
   }
 
   /* --- ③ 연석 · 중앙분리대 (단차) ------------------------------------ */
-  const curbStep = hi ? 1.5 : 4.2;
+  const curbStep = hi ? 1 : 2.4;
   for (let z = 0; z < SCENE_LEN; z += curbStep) {
     // 중앙분리대 상면 + 양 측면
     put((rnd() * 2 - 1) * 0.75, 0.15 + rnd() * 0.012, z, toBucket(0.3 + rnd() * 0.12), 0.6, 0.05);
@@ -331,7 +331,7 @@ function buildScene(budget: number): Scene {
      읽히게 하는 것은 두 가지다: **연석의 수직 단차**(도로와 인도를 가르는 선)와
      **보도블록 줄눈**(세로 한 줄, 가로 60cm 간격). 이 격자가 없으면 인도는
      그냥 회색 바닥이고, 그 위에 선 사람이 허공에 떠 보인다. */
-  const walkStep = hi ? 0.45 : 1.3;
+  const walkStep = hi ? 0.3 : 0.7;
   for (let z = 0; z < SCENE_LEN; z += walkStep) {
     for (let s = -1; s <= 1; s += 2) {
       // 연석 수직면 — 도로 가장자리를 따라 달리는 15cm 단차
@@ -383,7 +383,7 @@ function buildScene(budget: number): Scene {
 
   /* --- ④ 중앙분리대 방호울타리 --------------------------------------- */
   // 소실점으로 정확히 수렴하는 두 줄의 레일. 화면 한가운데라 도로의 척추가 된다.
-  const railStep = hi ? 1.15 : 1.9;
+  const railStep = hi ? 0.78 : 1.2;
   const railY = hi ? [0.55, 0.82] : [0.74];
   for (const ry of railY) {
     for (let z = 0; z < SCENE_LEN; z += railStep) {
@@ -400,7 +400,7 @@ function buildScene(budget: number): Scene {
   }
 
   /* --- ⑤ 길가장자리 가드레일 (지주 + 레일) ---------------------------- */
-  const shoulderRailStep = hi ? 1.4 : 4;
+  const shoulderRailStep = hi ? 0.95 : 2.2;
   for (let z = 0; z < SCENE_LEN; z += shoulderRailStep) {
     for (let s = -1; s <= 1; s += 2) {
       put(s * 8.62, 0.62 + (rnd() - 0.5) * 0.03, z, toBucket(0.48 + rnd() * 0.1), 0.6, 0.05);
@@ -527,7 +527,7 @@ function buildScene(budget: number): Scene {
   }
 
   /* --- ⑨ 가로등 열 — 규칙적인 리듬 ------------------------------------ */
-  const poleN = hi ? 18 : 8;
+  const poleN = hi ? 18 : 13;
   const armN = hi ? 8 : 3;
   flip = 0;
   for (let z = 6; z < SCENE_LEN; z += 22) {
@@ -542,7 +542,7 @@ function buildScene(budget: number): Scene {
   }
 
   /* --- ⑩ 담장 · 관목 — 원경 실루엣 ------------------------------------ */
-  const wallStep = hi ? 1.8 : 4.4;
+  const wallStep = hi ? 1.2 : 2.6;
   for (let z = 0; z < SCENE_LEN; z += wallStep) {
     for (let s = -1; s <= 1; s += 2) {
       put(s * (14.6 + rnd() * 1.3), rnd() * 2.2, z, WHITE, 0.22 + rnd() * 0.12, 0.045);
@@ -638,9 +638,9 @@ const relHi = (b: number, dzBottom: number): number =>
 function buildRelLayer(budget: number): RelLayer {
   const hi = budget > 5000;
   const rnd = mulberry32(0x2ea5_0011);
-  const scatterN = hi ? 4200 : 1400;
-  const paintPer = hi ? 170 : 62;
-  const walkPer = hi ? 900 : 260;
+  const scatterN = hi ? 9000 : 4200;
+  const paintPer = hi ? 320 : 170;
+  const walkPer = hi ? 1700 : 780;
   const n = scatterN + paintPer * LANE_LINES.length + walkPer;
 
   const dz = new Float32Array(n);
@@ -804,8 +804,16 @@ const SHAPES: CarShape[] = [
   },
 ];
 
-/** 표면 표본 간격(m). 25m 거리에서 약 4px — 점이 개별 사각형으로 흩어지지 않는다. */
-const SURF = 0.13;
+/**
+ * 차체 표면 표본 간격(m).
+ *
+ * 0.13m 였을 때 차는 25m 에서 4px 간격이라 형태는 읽히지만 면이 성겼다.
+ * 0.095m 까지 좁혀 봤더니 이번에는 가까운 차가 **파란 색면 한 장**이 됐다 —
+ * 점군의 뜻은 면을 채우는 데 있는 게 아니라 면이 **점으로 이루어져 있음**을
+ * 보이는 데 있다. 0.11m 가 그 사이다: 뒷면·유리·바퀴가 구분되면서 점은 여전히
+ * 세어진다. 화면에 동시에 서는 차가 17대뿐이라 이 배수는 예산에서 감당된다.
+ */
+const SURF = 0.11;
 
 interface CarTemplate {
   n: number;
@@ -1450,27 +1458,261 @@ const ANNO_CAP = 1600;
 const BAR_NEAR = 16;
 
 /* ------------------------------------------------------------------ *
+ * 커서 = 자차 센서의 지향 (2축 짐벌)
+ *
+ * **화면 위에 아무것도 생기지 않는다.** 커서 자리를 밝히는 원판을 만들어 봤는데,
+ * 그건 배경에 손전등을 비추는 것이지 자율주행 연구실의 인터랙션이 아니었다.
+ * 반응하는 것은 커서 자리가 아니라 **세계**다. 커서는 자차가 겨누는 곳이고,
+ * 자차는 거기를 보려고 **몸을 움직인다**:
+ *
+ *   가로 — 운전대. 차가 차로 안에서 그쪽으로 옮겨 가고(`STEER_X`), 시선이 그만큼
+ *          돌아가고(`STEER_YAW`), **차체가 바깥쪽으로 기운다**(`STEER_ROLL`).
+ *   세로 — 센서의 피치. 고개를 들면 지평선이 내려가 먼 곳이 열리고, 숙이면
+ *          지평선이 올라가 노면이 화면을 채운다(`STEER_PITCH`).
+ *
+ * 셋 다 화면 효과가 아니라 **투영 자체**를 움직인다 — 주점(cx·cy)과 카메라
+ * 횡위치를 옮기는 것이라 시차가 진짜로 생긴다. 가까운 차선 도색은 크게, 먼
+ * 가로등은 거의 안 움직인다. 화면을 덧칠해서는 나오지 않는 깊이 단서이고,
+ * 이 배경이 이미지가 아니라 점군이라는 사실이 그때 드러난다.
+ *
+ * **롤만은 카울(보닛)에 걸지 않는다.** 보닛은 차에 붙어 있어 차와 함께 기울므로
+ * 화면에서는 그대로 있고, 그 고정된 실루엣에 대고 **세계가 기운다** — 차 안에서
+ * 커브를 돌 때 실제로 보이는 그림이다. 둘 다 기울이면 아무 일도 안 일어난다.
+ *
+ * 값은 rAF 안에서 한 번만 뒤따르고 리스너는 목표만 적는다 — 프레임 안에서
+ * 이벤트를 읽지도, state 를 건드리지도 않는다.
+ * ------------------------------------------------------------------ */
+
+/** 차로 안에서 좌우로 움직이는 폭(m). 차로가 3.4m 라 이보다 크면 선을 밟는다. */
+const STEER_X = 1.15;
+/** 조향에 딸려오는 요 — 주점 이동량(화면 폭 대비). */
+const STEER_YAW = 0.034;
+/**
+ * 차체 롤 — 화면 가로 1px 당 세로 기울기. 0.034 는 약 2°(폭 1440 에서 양끝 ±24px).
+ * 더 주면 수평선이 기운 사진처럼 보이고, 덜 주면 조향했다는 것을 못 알아챈다.
+ */
+const STEER_ROLL = 0.034;
+/**
+ * 센서 피치 — 소실점의 세로 이동량(화면 높이 대비, 편도).
+ * 위아래가 대칭이 아니다: 고개를 들면 하늘(빈 곳)만 늘어나므로 위쪽은 절반만 준다.
+ */
+const STEER_PITCH = 0.055;
+const STEER_PITCH_UP = 0.5;
+/** 손을 따라잡는 시간상수(s). 차라서 시선보다 느리다. */
+const STEER_TAU = 0.38;
+/**
+ * 지향이 움직이는 동안 스윕 빔이 살아나는 정도 — **프레임당 지향 변화량**에 곱한다.
+ * 센서를 돌리면 그 각도를 다시 훑는 것이 LiDAR 가 실제로 하는 일이다. 커서 자리에
+ * 무언가를 덧그리는 것이 아니라, 이미 있는 스캔선이 화면 전체를 한 번 훑고 간다.
+ *
+ * **정착하면 정확히 0 이 되어야 한다** — 지향이 목표에 스냅하면 변화량이 0 이 되고,
+ * 그래야 "완전 정지 프레임은 통째로 건너뛴다" 판정이 다시 선다.
+ */
+const STEER_BEAM = 18;
+
+/* ------------------------------------------------------------------ *
  * 조용한 영역 — 본문이 앉는 자리
  *
  * 움직이는 점군 위에서는 본문이 읽히지 않는다. 이것을 CSS 블러 판으로 풀면
  * 프로스티드 글래스 카드가 되어(실제로 한 번 그랬다) 이 사이트의 전제가 깨진다.
- * 대신 **캔버스가 직접** 조용해진다: `data-quiet` 가 붙은 요소의 화면 사각형
- * 안에서 점의 알파가 떨어진다. 테두리도, 재질 변화도, 판도 없다 —
- * 그 자리에서 점이 성겨질 뿐이다.
+ * 대신 **캔버스가 직접** 조용해진다: `data-quiet` 가 붙은 요소의 자리에서 점의
+ * 알파가 떨어진다. 테두리도, 재질 변화도, 판도 없다 — 점이 성겨질 뿐이다.
  *
- * 점마다 사각형들과 거리를 재면 비싸다(점 1.5만 × 사각형 6개). 대신 화면을
- * 거친 격자로 나눠 감쇠값을 **프레임당 한 번** 굽고, 점은 한 번 조회한다.
+ * **요소의 사각형이 아니라 글줄의 자리를 쓴다.** 한때 요소의 border box 하나를
+ * 통째로 조용하게 만들었는데, 본문 구역은 전부 화면 폭짜리 블록이라 결과가
+ * **화면 전체가 10% 로 죽는 것**이었다(`.papers` 는 1440×1481 이었다). 도로가
+ * 있다가 없어지니, 구역을 지날 때마다 배경이 꺼졌다 켜졌다 했다 — 교수님이
+ * "배경과 요소의 경계가 어색하다"고 한 것의 절반이 이것이다.
+ *
+ * 그래서 요소 안의 **글줄 상자**(Range.getClientRects)를 모아 줄 단위로 뭉쳐
+ * 쓴다. 글이 실제로 앉은 자리만 조용해지고, 빈 여백·바깥 칼럼에서는 도로가
+ * 그대로 산다. 글줄은 레이아웃이 바뀔 때만 달라지므로 **요소 기준 상대 좌표로
+ * 캐시**하고, 프레임마다 읽는 것은 여전히 요소의 rect 하나뿐이다.
+ *
+ * 점마다 상자들과 거리를 재면 비싸다(점 3만 × 상자 수십). 대신 화면을 거친
+ * 격자로 나눠 감쇠값을 **프레임당 한 번** 굽고, 점은 한 번 조회한다.
  * ------------------------------------------------------------------ */
 
 /** 감쇠 격자 해상도. 1280px 에서 셀 20px — 감쇠 거리(120px)의 1/6 이라 계단이 안 보인다. */
 const QW = 64;
 const QH = 44;
-/** 사각형 밖으로 감쇠가 풀리는 거리(화면 짧은 변 기준 비율). */
-const QUIET_SOFT = 0.14;
-/** 가장 조용한 곳에 남는 밝기. 0 이면 글자 뒤가 새까만 창이 되어 그것대로 판이다. */
-const QUIET_FLOOR = 0.26;
-/** 한 프레임에 볼 `data-quiet` 사각형 수 상한. */
-const QUIET_MAX = 6;
+/**
+ * 상자 밖으로 감쇠가 풀리는 거리(화면 짧은 변 기준 비율).
+ * 글줄 상자로 바꾸면서 0.14 → 0.19 로 늘렸다. 예전에는 요소 사각형이 화면을
+ * 통째로 덮어 **경계가 화면 밖에 있었지만**, 이제는 글이 없는 쪽에 도로가 살아
+ * 있어 경계가 화면 안에 들어온다 — 그만큼 더 길게 풀어야 선으로 안 읽힌다.
+ */
+const QUIET_SOFT = 0.19;
+/**
+ * 가장 조용한 곳에 남는 밝기. 0 이면 글자 뒤가 새까만 창이 되어 그것대로 판이다.
+ * 점밀도를 1.6배로 올리면서 0.26 → 0.1 로 내렸다 — **바닥이 아니라 곱이 밝기를
+ * 정하므로**, 점이 늘면 같은 바닥에서도 글자 뒤가 그만큼 시끄러워진다.
+ */
+const QUIET_FLOOR = 0.1;
+/**
+ * `data-quiet="panel"` 의 바닥. **계측기가 서는 자리는 도로가 더 깊이 잠긴다.**
+ *
+ * 글은 도로 위에 얹히지만 계측기는 **다른 장비의 화면**이다 — 그 안까지 도로가
+ * 비쳐 들면 수치 위로 점이 지나간다(실제로 `7/7` 위에 주황 점이 얹혔다).
+ * 대신 판을 깔지 않는다: 불투명면은 도로를 직각으로 자르지만, 바닥을 내리면
+ * 같은 자리가 **171px 에 걸쳐 서서히** 잠겨 경계가 선으로 남지 않는다.
+ */
+const QUIET_DEEP = 0.015;
+/**
+ * 계측기 둘레에서 감쇠가 풀리는 거리. 글보다 짧다.
+ *
+ * 계측기는 화면의 4분의 1을 쓰는 큰 사각형이라 글과 같은 171px 를 두르면 화면의
+ * 절반이 함께 잠긴다 — 실측으로 연구 패널의 그린 점이 19,900 → 4,600 으로 떨어졌다.
+ * 바닥이 깊은 만큼 짧게 풀어도 기울기는 글 쪽과 비슷하다
+ * (최대 기울기 ≈ 1.5·(1−바닥)/거리: 글 0.0079/px · 계측기 0.0101/px).
+ */
+const QUIET_SOFT_PANEL = 0.146;
+/** 한 프레임에 볼 `data-quiet` 요소 수 상한. */
+const QUIET_MAX = 10;
+/**
+ * 요소 하나가 쓰는 글줄 상자 수 상한. 넘으면 세로로 가까운 것끼리 뭉친다 —
+ * 논문 목록처럼 줄이 40개인 구역도 8덩이로 접히되, **가로 폭은 글줄의 것**이라
+ * 화면 폭 사각형으로 되돌아가지는 않는다.
+ */
+const QUIET_INK_MAX = 8;
+/**
+ * 글줄 상자를 다시 재는 주기(s). 레이아웃이 안 바뀌어도 주기적으로 보는 이유는
+ * sticky 요소가 스크롤에 따라 부모 안에서 움직이기 때문이다. 한 프레임에 한
+ * 요소만 다시 잰다 — 여러 요소를 같은 프레임에 재면 그 프레임만 튄다.
+ */
+const QUIET_INK_TTL = 0.5;
+
+/**
+ * 조용한 요소 하나. `box` 는 **요소 기준 상대 좌표**의 글줄 상자
+ * `[x, y, w, h]` 묶음이라, 프레임마다 요소 rect 하나만 읽어 더하면 된다.
+ */
+interface QuietEl {
+  el: Element;
+  /** 이 요소가 도로를 잠그는 바닥(`QUIET_FLOOR` 또는 `QUIET_DEEP`) */
+  floor: number;
+  /** 감쇠가 풀리는 거리(화면 짧은 변 대비) */
+  soft: number;
+  /** 마지막으로 글줄을 잰 때의 요소 크기 — 달라지면 다시 잰다 */
+  bw: number;
+  bh: number;
+  /** 마지막으로 잰 시각(s) */
+  at: number;
+  /** [x, y, w, h] × n (요소 기준) */
+  box: Float64Array;
+  n: number;
+}
+
+/** 글줄 상자 수집용 스크래치. 요소 하나를 잴 때만 쓰고 바로 비운다. */
+const inkScratch = new Float64Array(QUIET_INK_MAX * 4);
+
+/**
+ * 요소 안에서 **글이 실제로 앉은 자리**를 최대 `QUIET_INK_MAX` 덩이로 모은다.
+ *
+ * `Range.getClientRects()` 는 글줄마다 상자를 하나씩 준다(캔버스·이미지 같은
+ * 치환 요소는 그 자체로 한 상자). 세로로 겹치는 것끼리 한 줄로 합치고, 줄이
+ * 상한을 넘으면 **세로로 가장 가까운 두 줄**부터 뭉친다 — 뭉쳐도 가로 폭은
+ * 글줄의 것이라 화면 폭 사각형으로 돌아가지 않는다.
+ *
+ * 글이 없으면(0 상자) 요소 사각형 하나를 그대로 쓴다.
+ */
+function inkBoxes(el: Element, q: QuietEl, r: DOMRect): void {
+  const s = inkScratch;
+  let n = 0;
+  let rects: DOMRectList | null = null;
+  try {
+    const range = document.createRange();
+    range.selectNodeContents(el);
+    rects = range.getClientRects();
+    range.detach();
+  } catch {
+    rects = null;
+  }
+  if (rects) {
+    for (let i = 0; i < rects.length; i++) {
+      const t = rects[i]!;
+      if (t.width <= 0.5 || t.height <= 0.5) continue;
+      // 요소 밖으로 삐져나온 것(sticky·absolute 자식)은 요소 안으로 자른다.
+      let l = t.left < r.left ? r.left : t.left;
+      let rr = t.right > r.right ? r.right : t.right;
+      let tp = t.top < r.top ? r.top : t.top;
+      let bt = t.bottom > r.bottom ? r.bottom : t.bottom;
+      if (rr - l <= 0.5 || bt - tp <= 0.5) continue;
+      l -= r.left;
+      rr -= r.left;
+      tp -= r.top;
+      bt -= r.top;
+      // 세로로 겹치는 줄을 찾아 합친다.
+      let hit = -1;
+      for (let b = 0; b < n; b++) {
+        const by = s[b * 4 + 1]!;
+        const bb = by + s[b * 4 + 3]!;
+        if (tp < bb && bt > by) {
+          hit = b;
+          break;
+        }
+      }
+      if (hit >= 0) {
+        const j = hit * 4;
+        const x0 = Math.min(s[j]!, l);
+        const y0 = Math.min(s[j + 1]!, tp);
+        s[j] = x0;
+        s[j + 1] = y0;
+        s[j + 2] = Math.max(s[j]! + s[j + 2]!, rr) - x0;
+        s[j + 3] = Math.max(s[j + 1]! + s[j + 3]!, bt) - y0;
+        continue;
+      }
+      if (n < QUIET_INK_MAX) {
+        const j = n * 4;
+        s[j] = l;
+        s[j + 1] = tp;
+        s[j + 2] = rr - l;
+        s[j + 3] = bt - tp;
+        n++;
+        continue;
+      }
+      // 자리가 없다 — 세로로 가장 가까운 두 줄을 뭉쳐 한 칸 낸다.
+      let best = 0;
+      let bestGap = Infinity;
+      for (let b = 0; b + 1 < n; b++) {
+        for (let c = b + 1; c < n; c++) {
+          const g = Math.abs(s[c * 4 + 1]! - s[b * 4 + 1]!);
+          if (g < bestGap) {
+            bestGap = g;
+            best = b * QUIET_INK_MAX + c;
+          }
+        }
+      }
+      const bi = ((best / QUIET_INK_MAX) | 0) * 4;
+      const ci = (best % QUIET_INK_MAX) * 4;
+      const x0 = Math.min(s[bi]!, s[ci]!);
+      const y0 = Math.min(s[bi + 1]!, s[ci + 1]!);
+      const x1 = Math.max(s[bi]! + s[bi + 2]!, s[ci]! + s[ci + 2]!);
+      const y1 = Math.max(s[bi + 1]! + s[bi + 3]!, s[ci + 1]! + s[ci + 3]!);
+      s[bi] = x0;
+      s[bi + 1] = y0;
+      s[bi + 2] = x1 - x0;
+      s[bi + 3] = y1 - y0;
+      // 뭉쳐서 빈 칸(ci)에 마지막 줄을 당겨 오고, 그 자리에 새 줄을 넣는다.
+      const last = (n - 1) * 4;
+      if (ci !== last) for (let k = 0; k < 4; k++) s[ci + k] = s[last + k]!;
+      s[last] = l;
+      s[last + 1] = tp;
+      s[last + 2] = rr - l;
+      s[last + 3] = bt - tp;
+    }
+  }
+  if (n === 0) {
+    s[0] = 0;
+    s[1] = 0;
+    s[2] = r.width;
+    s[3] = r.height;
+    n = 1;
+  }
+  q.box.set(s.subarray(0, n * 4));
+  q.n = n;
+  q.bw = r.width;
+  q.bh = r.height;
+}
 
 interface Column {
   /**
@@ -1748,6 +1990,17 @@ export interface RoadProbe {
   horizon: number;
   /** 초점거리(px) */
   f: number;
+  /** 커서가 만든 지향 — [조향 −1…1, 피치 −1…1, 롤(px/px), 주점 가로(px)] */
+  aim: [number, number, number, number];
+  /**
+   * 이번 프레임에 실제로 구운 조용한 상자들 — [화면 x, y, w, h, 감쇠거리(px), 바닥] × n.
+   *
+   * 요소의 border box 가 아니라 **글줄 상자**라 검사기가 "감쇠가 닿지 않는 자리"를
+   * 정확히 고를 수 있다. 동작 줄이기에서 스크롤해도 세계가 얼어 있는지를 재려면
+   * 이 값이 필요하다 — 화면 폭짜리 구역의 rect 로 가늠하면 화면 전체가 후보에서
+   * 빠져 검사가 공전한다(실제로 12,960칸 중 0칸이 남았다).
+   */
+  quietBoxes: number[];
   /** 카메라 상승 진행도 0→1 */
   rise: number;
   /** 차량 등장 진행도 0→1 */
@@ -1808,6 +2061,9 @@ interface LoopState {
   drawnBoost: number;
   drawnRise: number;
   drawnFleet: number;
+  /** 마지막으로 그린 조향. 커서가 움직였으면 카메라가 멈춰 있어도 그림이 다르다. */
+  drawnSteer: number;
+  drawnPitch: number;
   /** 마지막으로 CSS 변수에 흘려보낸 값 — 안 바뀌면 DOM 을 건드리지 않는다 */
   cssH: number;
   cssP: number;
@@ -1829,8 +2085,12 @@ interface LoopState {
    */
   deckEl: HTMLElement | null;
   phaseAt: number;
-  /** 본문이 앉는 자리 — 여기서 점이 성겨진다 */
-  quietEls: Element[];
+  /** 본문이 앉는 자리 — 여기서 점이 성겨진다. 글줄 상자는 요소 기준으로 캐시한다 */
+  quiet: QuietEl[];
+  /** 이번 프레임에 글줄을 다시 잰 요소가 있는가 — 한 프레임에 하나만 잰다 */
+  inkAt: number;
+  /** 이번 프레임에 구운 상자들(검사기용). `roadProbe.quietBoxes` 로 나간다 */
+  quietBoxes: number[];
   /**
    * 01막 증폭률의 재료. 기준 속도는 **교란이 시작되는 그 순간** 잡는다 —
    * 고정 상수나 특정 진행도에서 잡으면 직전 파동이 지나가는 중일 수 있다.
@@ -1900,6 +2160,8 @@ export function usePointCloud(
     drawnBoost: Number.NaN,
     drawnRise: Number.NaN,
     drawnFleet: Number.NaN,
+    drawnSteer: Number.NaN,
+    drawnPitch: Number.NaN,
     cssH: Number.NaN,
     cssP: Number.NaN,
     cssV: -1,
@@ -1912,7 +2174,9 @@ export function usePointCloud(
     phaseEl: null,
     actEls: [],
     deckEl: null,
-    quietEls: [],
+    quiet: [],
+    inkAt: -1,
+    quietBoxes: [],
     ampLeadBase: Number.NaN,
     ampRearBase: Number.NaN,
     ampLead: Number.NaN,
@@ -1955,6 +2219,13 @@ export function usePointCloud(
   }
   const mobile = mobileRef.current;
 
+  /**
+   * 지향. `t*` 는 리스너가 적는 목표, 나머지는 프레임이 뒤따라간 값이다.
+   * `x`·`y` 는 화면 비율(0…1)이라 DPR·리사이즈와 무관하고, `k` 는 커서가 창 안에
+   * 있는 정도 — 나가면 0 으로 풀려 차가 차로 한가운데로, 시선이 수평으로 돌아온다.
+   */
+  const aimRef = useRef({ tx: 0.5, ty: 0.5, tk: 0, x: 0.5, y: 0.5, k: 0 });
+
   /** 대역별 [시작, 길이] 스크래치 — 프레임마다 새로 할당하지 않는다. */
   const lo1 = useRef(new Float64Array(REL_BANDS.length)).current;
   const sp1 = useRef(new Float64Array(REL_BANDS.length)).current;
@@ -1963,6 +2234,38 @@ export function usePointCloud(
   const reducedRef = useRef(reducedMotion);
   reducedRef.current = reducedMotion;
   const elapsedRef = useRef(0);
+  /** 정지 프레임 다시 그리기 예약 id. 0 = 예약 없음. */
+  const stillRafRef = useRef(0);
+
+  /* ------------------------------------------------------------------ *
+   * 정지 프레임 다시 그리기 (동작 줄이기 전용)
+   *
+   * 동작 줄이기에서 `useRafLoop` 은 콜백을 **딱 한 번** 부르고 멈춘다. 그래서
+   * 도로가 한 장으로 굳는데, `data-quiet` 감쇠는 화면 좌표로 굽는 것이라
+   * 스크롤하면 글과 어긋난다 — 본문이 만점군 위에 그대로 얹힌다.
+   *
+   * **세계를 움직이는 것이 아니라 마스크를 따라오게 하는 것이다.** 이 경로로
+   * 다시 그려도 카메라 z·차량·스윕·막은 전부 얼어 있다(`still` 분기가 전부
+   * 잠근다). 달라지는 것은 글이 앉은 자리의 감쇠뿐이고, 그건 연출이 아니라
+   * 가독성 장치다.
+   *
+   * 리스너는 **예약만 한다** — 레이아웃을 읽지 않는다. 스크롤 이벤트가 아무리
+   * 많이 와도 rAF 하나로 뭉쳐져 한 프레임에 한 장만 그려진다.
+   * ------------------------------------------------------------------ */
+  const redrawStill = (): void => {
+    if (stillRafRef.current) return;
+    stillRafRef.current = requestAnimationFrame(() => {
+      stillRafRef.current = 0;
+      if (!reducedRef.current) return;
+      // 조용해질 자리가 달라졌다 — "정지 프레임은 통째로 건너뛴다" 판정을 연다.
+      stateRef.current.dirty = true;
+      /* 시각은 실제로 흘려보낸다. dt 는 0 이라 세계는 한 틱도 나아가지 않지만,
+         글줄 상자 재측정 주기(`QUIET_INK_TTL`)와 문서 높이 갱신이 `elapsed` 의
+         **차이**로 돌아가기 때문에 0 으로 고정하면 그것들이 영영 안 돈다. */
+      elapsedRef.current = performance.now() / 1000;
+      drawRef.current(0, elapsedRef.current);
+    });
+  };
 
   const view = useCanvas2D(canvasRef, {
     maxDpr: 2,
@@ -1971,9 +2274,7 @@ export function usePointCloud(
       // 버퍼를 다시 잡으면 화면이 비므로 정지 상태에서도 한 장 다시 그려야 한다.
       stateRef.current.dirty = true;
       stateRef.current.docAt = -1;
-      if (reducedRef.current && v.ctx) {
-        requestAnimationFrame(() => drawRef.current(0, elapsedRef.current));
-      }
+      if (reducedRef.current && v.ctx) redrawStill();
     },
   });
 
@@ -1988,6 +2289,12 @@ export function usePointCloud(
 
     elapsedRef.current = elapsed;
 
+    /* 예산은 두 단계다(`hi = budget > 5000`). 모바일 쪽 값은 2016년식 폰을
+       기준으로 잡은 것이라 지금 기기에서는 지나치게 성겼다 — 데스크톱이 29,337점일
+       때 모바일은 4,400점이어서 **도로가 거의 안 보였다**(히어로 밝은픽셀 1.8% 대
+       7.3%). 이 사이트의 전제가 배경인데 전화에서는 그 전제가 사라져 있었다.
+       모바일 층의 개수·간격을 따로 올려 약 12,000점으로 맞췄다. 30fps 상한이
+       걸려 있어 프레임 예산은 데스크톱의 두 배다. */
     const budget = mobile ? 2500 : 9000;
     const scene = sceneRef.current ?? (sceneRef.current = buildScene(budget));
     const rel = relRef.current ?? (relRef.current = buildRelLayer(budget));
@@ -2034,6 +2341,31 @@ export function usePointCloud(
     const st = stateRef.current;
     const still = reducedRef.current;
 
+    /* --- 커서 = 센서의 지향 (뒤따라가기) -------------------------------- */
+    const aim = aimRef.current;
+    {
+      const kTau = dt > 0 ? 1 - Math.exp(-dt / STEER_TAU) : 1;
+      aim.x += (aim.tx - aim.x) * kTau;
+      aim.y += (aim.ty - aim.y) * kTau;
+      aim.k += ((still ? 0 : aim.tk) - aim.k) * kTau;
+      /* 지수 감쇠는 목표에 **영원히 닿지 않는다.** 그대로 두면 아래의 정지 판정이
+         매 프레임 1e-9 만큼 어긋나 영원히 다시 그린다 — 커서를 한 번 움직인 뒤로
+         페이지가 계속 60fps 를 태운다. 충분히 가까워지면 붙인다.
+         **새 축을 더하면 여기와 아래 정지 판정 양쪽에 반드시 같이 넣는다.** */
+      if (Math.abs(aim.tx - aim.x) < 2e-4) aim.x = aim.tx;
+      if (Math.abs(aim.ty - aim.y) < 2e-4) aim.y = aim.ty;
+      const tk = still ? 0 : aim.tk;
+      if (Math.abs(tk - aim.k) < 2e-4) aim.k = tk;
+    }
+    /** 조향 −1(왼쪽)…+1(오른쪽). 커서가 없으면 정확히 0 이다. */
+    const steer = (aim.x * 2 - 1) * aim.k;
+    /**
+     * 피치 −1(아래를 본다)…+1(위를 본다). 위쪽은 하늘만 늘어나므로 절반만 쓴다.
+     * 커서가 없으면 정확히 0 — 정지 판정이 다시 서려면 이 값이 **정확히** 0 이어야 한다.
+     */
+    const aimUp = (0.5 - aim.y) * 2 * aim.k;
+    const pitch = aimUp > 0 ? aimUp * STEER_PITCH_UP : aimUp;
+
     /* --- 스크롤 읽기 --------------------------------------------------
        스크롤은 오직 여기, rAF 안에서만 읽는다. scroll 리스너도 setState 도 없다.
        문서 전체가 주행 구간이다 — 히어로부터 푸터의 주소까지.             */
@@ -2056,12 +2388,21 @@ export function usePointCloud(
        `stageP` 는 무대 **안에서의** 진행도(4개 주제가 차례로 펼쳐진다).
        레이아웃 강제를 피하려고 getBoundingClientRect 는 프레임당 **한 번**만
        부르고, 4개 막은 이 하나의 값에서 산술로 나눈다(각 막의 높이가 같다). */
-    if ((!st.phaseEl || !st.quietEls.length) && (st.phaseAt < 0 || elapsed - st.phaseAt > 1)) {
+    if ((!st.phaseEl || !st.quiet.length) && (st.phaseAt < 0 || elapsed - st.phaseAt > 1)) {
       st.phaseAt = elapsed;
       st.phaseEl = document.querySelector('[data-road-stage]');
       st.actEls = st.phaseEl ? [...st.phaseEl.querySelectorAll('[data-act]')] : [];
       st.deckEl = st.phaseEl ? st.phaseEl.querySelector<HTMLElement>('[data-deck]') : null;
-      st.quietEls = [...document.querySelectorAll('[data-quiet]')];
+      st.quiet = [...document.querySelectorAll('[data-quiet]')].map((el) => ({
+        el,
+        floor: el.getAttribute('data-quiet') === 'panel' ? QUIET_DEEP : QUIET_FLOOR,
+        soft: el.getAttribute('data-quiet') === 'panel' ? QUIET_SOFT_PANEL : QUIET_SOFT,
+        bw: Number.NaN,
+        bh: Number.NaN,
+        at: -1,
+        box: new Float64Array(QUIET_INK_MAX * 4),
+        n: 0,
+      }));
     }
 
     /* 각 막의 진행도는 **그 막의 DOM 요소에서 직접** 잰다. 무대 높이를 4등분하는
@@ -2121,43 +2462,88 @@ export function usePointCloud(
     }
 
     /* --- 조용한 영역 굽기 -------------------------------------------
-       `data-quiet` 요소의 화면 사각형 안에서 점의 알파를 떨어뜨린다. 사각형마다
-       점을 검사하면 비싸므로 거친 격자에 미리 구워 두고 점은 한 번만 조회한다.
-       감쇠는 사각형 **밖으로** 부드럽게 풀린다 — 그래야 변이 드러나지 않는다.  */
+       `data-quiet` 요소 **안의 글줄이 앉은 자리**에서 점의 알파를 떨어뜨린다.
+       상자마다 점을 검사하면 비싸므로 거친 격자에 미리 구워 두고 점은 한 번만
+       조회한다. 감쇠는 상자 **밖으로** 부드럽게 풀린다 — 변이 드러나지 않게.
+
+       읽기는 전부 여기서 끝낸다. 아래의 CSS 커스텀 프로퍼티 쓰기보다 **앞**이라
+       읽기·쓰기가 번갈아 일어나지 않는다(그러면 프레임마다 강제 리플로가 난다).
+
+       **동작 줄이기에서도 굽는다.** 전에는 여기를 통째로 건너뛰었고(정지 프레임은
+       한 장만 그리니 조용해질 자리를 알 수 없다고 보았다), 그 결과 동작 줄이기를
+       켠 사람만 본문이 만점군 위에 얹혀 거의 못 읽었다 — 실측으로 논문 제목 자리
+       픽셀의 1%가 대비 1.06:1(글자보다 배경이 밝다) 이었다. 접근성 설정을 켰더니
+       읽기가 더 어려워지는 것은 그 설정의 목적에 정면으로 어긋난다.
+
+       **이것은 "배경이 움직이는 것"이 아니다.** 세계(카메라 z·차량·스윕·막)는
+       그대로 얼어 있다 — 스크롤해도 점 하나 자리를 옮기지 않는다. 스크롤을 따라
+       갱신되는 것은 **글이 앉은 자리의 감쇠 마스크뿐**이고, 그건 연출이 아니라
+       가독성 장치다(애니메이션이 도는 쪽에서 쓰는 것과 같은 장치이기도 하다).
+       다시 굽는 계기는 rAF 루프가 아니라 **스크롤 리스너 → rAF 한 번**이다
+       (아래 §정지 프레임 다시 그리기). */
     {
       const q = buf.quiet;
       q.fill(1);
-      if (!still && st.quietEls.length) {
-        const soft = Math.min(W, H) * QUIET_SOFT;
-        const inv = 1 / soft;
+      st.quietBoxes.length = 0;
+      if (st.quiet.length) {
+        const shortSide = Math.min(W, H);
+        /* 화면 밖 판정에 쓰는 넉넉한 여유 — 실제 감쇠 거리는 요소마다 다르다. */
+        const softMax = shortSide * Math.max(QUIET_SOFT, QUIET_SOFT_PANEL);
         const cw = W / QW;
         const ch = H / QH;
         let seen = 0;
-        for (const el of st.quietEls) {
+        for (const qe of st.quiet) {
           if (seen >= QUIET_MAX) break;
-          const r = el.getBoundingClientRect();
-          if (r.bottom < -soft || r.top > H + soft || r.width <= 0) continue;
+          const r = qe.el.getBoundingClientRect();
+          if (r.bottom < -softMax || r.top > H + softMax || r.width <= 0) continue;
           // 가로 덱에서 옆으로 밀려난 패널은 화면 밖이다 — 세로만 보면 헛돈다.
-          if (r.right < -soft || r.left > W + soft) continue;
+          if (r.right < -softMax || r.left > W + softMax) continue;
           seen++;
-          // 감쇠가 0 이 되는 바깥 경계까지만 격자를 훑는다.
-          const c0 = Math.max(0, ((r.left - soft) / cw) | 0);
-          const c1 = Math.min(QW - 1, ((r.right + soft) / cw) | 0);
-          const r0 = Math.max(0, ((r.top - soft) / ch) | 0);
-          const r1 = Math.min(QH - 1, ((r.bottom + soft) / ch) | 0);
-          for (let gy = r0; gy <= r1; gy++) {
-            const py = (gy + 0.5) * ch;
-            const dy = py < r.top ? r.top - py : py > r.bottom ? py - r.bottom : 0;
-            if (dy >= soft) continue;
-            for (let gx = c0; gx <= c1; gx++) {
-              const px = (gx + 0.5) * cw;
-              const dx = px < r.left ? r.left - px : px > r.right ? px - r.right : 0;
-              const d = dx > dy ? dx : dy;
-              if (d >= soft) continue;
-              // 안쪽에서 가장 조용하고, soft 만큼 바깥에서 완전히 풀린다.
-              const k = QUIET_FLOOR + (1 - QUIET_FLOOR) * smooth(d * inv);
-              const i = gy * QW + gx;
-              if (k < q[i]!) q[i] = k;
+          /* 글줄을 다시 재는 때: 아직 안 쟀거나, 요소 크기가 달라졌거나(재조판),
+             sticky 자식이 움직일 만큼 시간이 지났을 때. **한 프레임에 한 요소만** —
+             여러 요소를 한꺼번에 재면 그 프레임만 길어진다. */
+          if (
+            qe.n === 0 ||
+            (st.inkAt !== elapsed &&
+              (Math.abs(r.width - qe.bw) > 0.5 ||
+                Math.abs(r.height - qe.bh) > 0.5 ||
+                elapsed - qe.at > QUIET_INK_TTL))
+          ) {
+            st.inkAt = elapsed;
+            qe.at = elapsed;
+            inkBoxes(qe.el, qe, r);
+          }
+          const box = qe.box;
+          const floor = qe.floor;
+          const span = 1 - floor;
+          const soft = shortSide * qe.soft;
+          const inv = 1 / soft;
+          for (let bi = 0; bi < qe.n; bi++) {
+            const bx = r.left + box[bi * 4]!;
+            const by = r.top + box[bi * 4 + 1]!;
+            const bR = bx + box[bi * 4 + 2]!;
+            const bB = by + box[bi * 4 + 3]!;
+            if (bB < -soft || by > H + soft || bR < -soft || bx > W + soft) continue;
+            st.quietBoxes.push(bx, by, bR - bx, bB - by, soft, floor);
+            // 감쇠가 0 이 되는 바깥 경계까지만 격자를 훑는다.
+            const c0 = Math.max(0, ((bx - soft) / cw) | 0);
+            const c1 = Math.min(QW - 1, ((bR + soft) / cw) | 0);
+            const r0 = Math.max(0, ((by - soft) / ch) | 0);
+            const r1 = Math.min(QH - 1, ((bB + soft) / ch) | 0);
+            for (let gy = r0; gy <= r1; gy++) {
+              const py = (gy + 0.5) * ch;
+              const dy = py < by ? by - py : py > bB ? py - bB : 0;
+              if (dy >= soft) continue;
+              for (let gx = c0; gx <= c1; gx++) {
+                const px = (gx + 0.5) * cw;
+                const dx = px < bx ? bx - px : px > bR ? px - bR : 0;
+                const d = dx > dy ? dx : dy;
+                if (d >= soft) continue;
+                // 안쪽에서 가장 조용하고, soft 만큼 바깥에서 완전히 풀린다.
+                const k = floor + span * smooth(d * inv);
+                const i = gy * QW + gx;
+                if (k < q[i]!) q[i] = k;
+              }
             }
           }
         }
@@ -2182,7 +2568,11 @@ export function usePointCloud(
       ? 0
       : deckRise >= 0
         ? deckRise
-        : smooth(clamp01((actT[0]! + 0.85) / 0.85)) *
+        : /* 선행 0.62 — 첫 막이 화면 아래끝에 닿을 때(actT₀ = −0.7)가 아니라 그 뒤부터
+             오른다. 0.85 였을 때는 **스크롤 0 에서 이미 rise 0.09** 였다: 첫 화면이
+             대시캠이 아니라 어중간하게 떠 있는 시점으로 시작했다(검사기가 잡았다).
+             여는 화면이 정확히 한 화면이라 그 앞에 여유가 없다. */
+          smooth(clamp01((actT[0]! + 0.62) / 0.62)) *
           (1 - smooth(clamp01((actT[ACTS - 1]! - 0.78) / 0.72)));
     const stageOn = riseK;
 
@@ -2289,10 +2679,16 @@ export function usePointCloud(
     // 소실점을 오른쪽으로 밀어 왼쪽에 타이포 공간을 연다(넓은 화면에서만).
     // 대시캠은 정면을 보므로 기본 이동량은 작다 — 약한 요(yaw) 정도로만 읽힌다.
     const shift = W <= 700 ? 0 : W >= 1100 ? 1 : (W - 700) / 400;
-    const cx = W * (0.5 + (0.042 + panK) * shift);
+    /* 조향에 딸린 요(px). 오른쪽으로 꺾으면 장면이 왼쪽으로 흐른다. */
+    const cx = W * (0.5 + (0.042 + panK) * shift) - W * STEER_YAW * steer;
     // 세로로 긴 화면(모바일)에서는 소실점을 조금 더 올려 빈 하늘을 줄인다.
     const tall = Math.min(1, Math.max(0, (H / W - 1.3) / 1));
-    const cy = H * (horizon - 0.05 * tall);
+    /* 센서 피치(px). 소실점을 세로로 옮긴다 — `ACT_CAM.horizon` 이 쓰는 것과 **같은
+       손잡이**다. 고개를 들면(pitch > 0) 소실점이 내려가 먼 곳이 열리고, 숙이면
+       올라가 노면이 화면을 채운다. 커서가 없으면 정확히 0 이라 구도가 그대로다. */
+    const cy = H * (horizon - 0.05 * tall) + H * STEER_PITCH * pitch;
+    /** 차체 롤(화면 가로 1px 당 세로 px). 카울에는 걸지 않는다 — §커서 = 센서의 지향. */
+    const roll = STEER_ROLL * steer;
     // 초점거리 — 대시캠은 광각(1280×860 에서 수평 화각 ≈ 93°). 좁은 화면에서
     // 과광각이 되지 않게 폭으로도 막는다.
     const f = Math.min(H * fovK, W * (1.3 + 0.6 * stageK));
@@ -2341,6 +2737,11 @@ export function usePointCloud(
         }
         actU[i] = u;
       }
+    } else if (still) {
+      /* 정지 프레임에는 막의 재생 헤드가 없다. `actK` 가 이미 0 이라 연출은 서지
+         않지만, 스크롤로 다시 그릴 때 `actT` 를 그대로 흘려보내면 배역(택시·합류차)
+         상태가 **스크롤을 따라 변한다** — 세계가 얼어 있어야 한다는 전제가 깨진다. */
+      actU.fill(0);
     } else {
       for (let i = 0; i < ACTS; i++) actU[i] = actT[i]!;
     }
@@ -2490,7 +2891,9 @@ export function usePointCloud(
     // 렌더에는 씬 길이로 되접은 값을 쓴다(곡선 함수는 SCENE_LEN 주기라 동일하다).
     const zAbs = st.camZ + Z0 - back;
     const camZ = zAbs - Math.floor(zAbs / SCENE_LEN) * SCENE_LEN;
-    const camX = curveX(camZ) + LANE_X;
+    /* 자차의 횡위치 — 여기서 조향이 실제로 좌표가 된다. 화면 효과가 아니라
+       카메라가 옆으로 옮겨 앉는 것이라, 가까운 것은 크게 먼 것은 조금 움직인다. */
+    const camX = curveX(camZ) + LANE_X + steer * STEER_X;
 
     /* --- 막별 연출 스크립트 --------------------------------------------
        "누가 차를 부르는가", "누가 합류하는가" 는 막이 시작될 때 **한 번** 고른다.
@@ -2626,7 +3029,12 @@ export function usePointCloud(
       // 부팅 스윕은 강하게 번쩍이고, 그 뒤로는 **주행 중에만** 빔이 보인다.
       // 멈추면 게인이 정확히 0 이 되어 잔광까지 사라진다 — 상시 운동 금지.
       const introK = Math.max(0, 1 - elapsed / (introEnd + 0.9));
-      kBoost = 2.6 * introK + 0.8 * moveK;
+      /* 지향이 움직이는 동안 스캐너가 그 각도를 다시 훑는다. 직전 프레임과의 차이를
+         쓰므로, 지향이 목표에 스냅하면 저절로 정확히 0 이 된다(§커서 = 센서의 지향). */
+      const aimVel = Number.isNaN(st.drawnSteer)
+        ? 0
+        : Math.abs(steer - st.drawnSteer) + Math.abs(pitch - st.drawnPitch);
+      kBoost = 2.6 * introK + 0.8 * moveK + 0.7 * Math.min(1, aimVel * STEER_BEAM);
     }
 
     // 첫 스윕이 끝난 뒤에도 아직 안 훑인 점(그때 화면 밖이었던 점)을 부드럽게 채운다.
@@ -2640,6 +3048,10 @@ export function usePointCloud(
       stageOn <= 0.02 &&
       // 조용한 영역은 스크롤과 함께 움직인다 — 스크롤이 멈춰야 같은 그림이 된다
       st.camZ === st.drawnZ &&
+      /* 지향이 그대로여야 같은 그림이다. **축을 더하면 여기에도 더한다** —
+         빠뜨리면 그 입력이 조용히 무시된다(실제로 그런 적이 있다). */
+      steer === st.drawnSteer &&
+      pitch === st.drawnPitch &&
       kBoost === 0 &&
       st.drawnBoost === 0 &&
       st.camZ === st.drawnZ &&
@@ -2718,7 +3130,10 @@ export function usePointCloud(
       const inv = f / dz;
       const sx = cx + (x - camX) * inv;
       if (sx < -8 || sx > W + 8) return;
-      const sy = cy + (camY - y) * inv;
+      /* 차체 롤. 작은 각이라 회전 대신 전단(shear)으로 낸다 — 2° 에서 둘의 차이는
+         0.06% 로 1px 도 안 된다. **카울은 여기를 거치지 않아 그대로 있고**, 그
+         고정된 보닛에 대고 세계가 기운다. */
+      const sy = cy + (camY - y) * inv + (sx - cx) * roll;
       if (sy < -8 || sy > H + 8) return;
       let shade = 1;
       if (cowlOn) {
@@ -2838,7 +3253,7 @@ export function usePointCloud(
       if (ps < 1) ps = 1;
       else if (ps > 5) ps = 5;
 
-      const bin = bucket[i] * ALPHA_STEPS + ak;
+      const bin = bucket[i]! * ALPHA_STEPS + ak;
       vsx[vc] = sx | 0;
       vsy[vc] = sy | 0;
       vps[vc] = ps;
@@ -3531,6 +3946,8 @@ export function usePointCloud(
     st.drawnBoost = kBoost;
     st.drawnRise = riseK;
     st.drawnFleet = fleetK;
+    st.drawnSteer = steer;
+    st.drawnPitch = pitch;
 
     // 계측 훅 — 검증 스크립트가 카메라 상태를 읽는다. DOM 변경이 아니라 속성이라
     // 스타일 무효화가 없다.
@@ -3544,6 +3961,8 @@ export function usePointCloud(
           camY: 0,
           horizon: 0,
           f: 0,
+          aim: [0, 0, 0, 0],
+          quietBoxes: [],
           rise: 0,
           fleet: 0,
           cars: 0,
@@ -3569,6 +3988,11 @@ export function usePointCloud(
       rp.camY = camY;
       rp.horizon = cy;
       rp.f = f;
+      rp.aim[0] = steer;
+      rp.aim[1] = pitch;
+      rp.aim[2] = roll;
+      rp.aim[3] = cx;
+      rp.quietBoxes = st.quietBoxes;
       rp.rise = riseK;
       rp.fleet = fleetK;
       rp.cars = carsDrawn;
@@ -3635,6 +4059,57 @@ export function usePointCloud(
   };
 
   drawRef.current = draw;
+
+  /* 커서 추적 — 목표만 적는다. 실제 조향은 draw 가 시간상수로 따라간다.
+     터치(coarse)와 동작 줄이기에서는 아예 붙지 않는다: 붙여 봐야 커서가 없고,
+     붙어 있으면 마지막 탭 자리에 시선이 얼어붙는다. */
+  useEffect(() => {
+    if (reducedMotion) return;
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
+    if (!window.matchMedia('(pointer: fine)').matches) return;
+
+    const aim = aimRef.current;
+    const onMove = (e: PointerEvent) => {
+      aim.tx = e.clientX / Math.max(1, window.innerWidth);
+      aim.ty = e.clientY / Math.max(1, window.innerHeight);
+      aim.tk = 1;
+    };
+    const onLeave = () => {
+      aim.tk = 0;
+      aim.tx = 0.5;
+      aim.ty = 0.5;
+    };
+    window.addEventListener('pointermove', onMove, { passive: true });
+    document.addEventListener('pointerleave', onLeave);
+    window.addEventListener('blur', onLeave);
+    return () => {
+      window.removeEventListener('pointermove', onMove);
+      document.removeEventListener('pointerleave', onLeave);
+      window.removeEventListener('blur', onLeave);
+      onLeave();
+    };
+  }, [reducedMotion]);
+
+  /* 동작 줄이기에서만 붙는다. 애니메이션이 도는 쪽은 rAF 가 매 프레임 `window.scrollY`
+     를 직접 읽으므로 스크롤 리스너가 필요 없다 — 두 경로가 겹치면 헛돈다. */
+  useEffect(() => {
+    if (!reducedMotion || typeof window === 'undefined') return;
+    const onScroll = () => redrawStill();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onScroll, { passive: true });
+    // 마운트 직후 이미 스크롤된 위치일 수 있다(새로고침·앵커 착지).
+    onScroll();
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+      window.removeEventListener('resize', onScroll);
+      if (stillRafRef.current) {
+        cancelAnimationFrame(stillRafRef.current);
+        stillRafRef.current = 0;
+      }
+    };
+    // `redrawStill` 은 ref 만 읽으므로 렌더마다 새로 만들어져도 동작이 같다 —
+    // 의존성에 넣지 않는 이유가 이것이다(넣으면 렌더마다 리스너를 다시 단다).
+  }, [reducedMotion]);
 
   useRafLoop((dt, elapsed) => drawRef.current(dt, elapsed), {
     target,

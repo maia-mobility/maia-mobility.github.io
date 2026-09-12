@@ -150,7 +150,7 @@ export default function TrafficSim({ scenario, lang, compact = false }: TrafficS
           : `SETTLING · 2-LAP WINDOW ${Math.round(Math.min(m.t, m.windowS))}/${Math.round(m.windowS)} s`,
       );
     } else if (m.scenario === 'dispatch') {
-      put('assigned', `${m.assigned + m.pending}/${DISPATCH.count}`);
+      put('assigned', `${m.assigned}/${DISPATCH.count}`);
       put('served', String(m.served));
       put('wait', num(m.meanWaitS));
       put('mean', num(m.meanKmh, 0));
@@ -180,7 +180,7 @@ export default function TrafficSim({ scenario, lang, compact = false }: TrafficS
       : scenario === 'shockwave'
         ? `${RING.count} VEH · RING ${RING.length} m · FOLLOWERSTOPPER AV × ${avCount}`
         : scenario === 'dispatch'
-          ? `${DISPATCH.count} VEH · ${DISPATCH.nodes} DEMAND NODES · LOOP ${DISPATCH.length} m`
+          ? `${DISPATCH.count} VEH · ${DISPATCH.cols}×${DISPATCH.rows} GRID · ${DISPATCH.length} m NETWORK`
           : `${V2V.count} VEH · LINK RANGE ${V2V.range} m · MERGE AT ${V2V.mergeAt} m`;
 
   return (

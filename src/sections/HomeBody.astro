@@ -1,483 +1,538 @@
 ---
-import SectionHead from '../components/SectionHead';
-import HudFrame from '../components/HudFrame';
-import Button from '../components/Button';
-import NewsTimeline from '../components/NewsTimeline';
+/*
+ * 홈 본문 — 도로 옆.
+ *
+ * 전제: 페이지는 평범하게 아래로 흐르고, **연구실의 재료가 도로 옆에 선다.**
+ *
+ *   · **연구분야마다 그 분야의 시뮬레이션이 실제로 돈다.** 이름만 넷 나열하는
+ *     화면이 아니다. 한 분야가 한 화면을 쓰고, 그 화면에서 배경 도로의 카메라도
+ *     그 분야의 자리로 옮겨 간다(`data-act`) — 앞은 계측기, 뒤는 같은 장면의
+ *     도로다. 같은 연구를 두 축척으로 동시에 본다.
+ *   · **구역마다 뼈대가 다르다.** 눈썹줄 → 큰 제목 → 헤어라인 → 목록을 아홉 번
+ *     반복한 것이 "AI 가 만든 티"의 실체였다. 여는 화면은 이름 하나, 연구는
+ *     번호가 화면 밖으로 잘려 나가는 대칭 격자, 논문은 여백에 붙어 따라오는
+ *     라벨, 사람은 점으로 해상되는 사진, 소식은 날짜 레일이다.
+ *   · 화면 어디에도 가짜 계측값이 없다.
+ *
+ * **홈은 요약이다.** 논문·소식은 최근 것만 싣고 전체 목록은 각자의 페이지가
+ * 맡는다. 연구분야만 예외로 넷 다 싣는다 — 시뮬레이션이 이 사이트의 본론이라서.
+ *
+ * 글은 전부 `src/data/*` 의 실제 문안이다. 지어낸 문장은 없고, 연구분야에는
+ * 설명문을 두지 않는다(교수님 결정) — 키워드와 도는 모델이 설명을 대신한다.
+ *
+ * ── 조판 규율 ───────────────────────────────────────────────────────────
+ *
+ * 한 줄의 길이는 **글자 수로** 잡는다. `ch` 는 이 글꼴에서 평균 글자보다 30%
+ * 쯤 넓어서(측정: 1ch = 10.3px, 평균 글자 7.8px @16.4px), `50ch` 가 실제로는
+ * 약 66자다 — 가독 범위(45~75자) 한가운데다. 그래서 `--read: 50ch` 하나를
+ * 본문 성격의 글에 공통으로 물린다.
+ *
+ * 줄이 **어디서** 바뀌는지도 값을 정한다. 소속·키워드처럼 의미 마디가 뚜렷한
+ * 줄은 마디를 flex 항목으로 쪼개, 줄바꿈이 마디 사이에서만 일어나게 했다.
+ * `white-space: nowrap` 으로 묶지 않은 이유는 320px 에서 마디 하나가 화면보다
+ * 길어지면 그대로 가로 스크롤이 되기 때문이다 — 마디는 필요하면 스스로 접힌다.
+ */
 import TrafficSim from '../components/TrafficSim';
+import DotPortrait from '../components/DotPortrait';
 import { RESEARCH } from '../data/research';
+import { PUBLICATIONS } from '../data/publications';
 import { NEWS } from '../data/news';
 import { SITE } from '../data/site';
+import { PI } from '../data/people';
 import { href, pick, type Lang } from '../i18n';
 import { UI } from '../i18n/ui';
 
-interface Props { lang: Lang }
+interface Props {
+  lang: Lang;
+}
 const { lang } = Astro.props;
-const c = SITE.contact;
+
+const t = (v: Parameters<typeof pick>[0]) => pick(v, lang);
+const fmt = (iso: string) => iso.replaceAll('-', '.');
+
+/** 분야 셈 — `01 / 04`. 배열이 늘면 분모도 따라 는다. */
+const ACT_TOTAL = String(RESEARCH.length).padStart(2, '0');
+
+/**
+ * 홈에 싣는 최근 논문. 종류를 섞어 연도 내림차순으로만 정렬한다 — 홈에서는
+ * 저널/학술대회 구분보다 "최근에 무엇을 냈는가"가 먼저다. 구분은 논문 페이지의 몫.
+ */
+const RECENT_PUBS = [...PUBLICATIONS].sort((a, b) => b.year - a.year).slice(0, 5);
+const RECENT_NEWS = NEWS.slice(0, 3);
+
+/*
+ * 소속은 쉼표가 곧 의미 마디다. 한 덩어리로 흘려 두면 좁은 화면에서
+ * "Division / of Smart Infrastructure Engineering," 처럼 마디 한가운데가
+ * 끊기고, 넓은 화면에서는 "Myongji University" 두 낱말만 다음 줄에 남았다.
+ */
+const AFFIL = t(SITE.affiliation).split(', ');
+
+/*
+ * 모집 문안은 두 문장이다. 앞 문장은 주장이고 뒷 문장은 "아래 메일로 연락하라"는
+ * 안내다. 둘을 같은 크기로 세우면 이 페이지에서 가장 큰 글씨가 안내문이 된다.
+ * 주장만 크게 세우고, 안내는 그것이 가리키는 주소 바로 위에 본문 크기로 둔다.
+ * 문안 자체는 한 글자도 건드리지 않는다.
+ */
+const RECRUIT = t(SITE.recruiting).split(/(?<=[.\uff0e])\s+/);
+const RECRUIT_CLAIM = RECRUIT.length > 1 ? RECRUIT.slice(0, -1).join(' ') : RECRUIT[0];
+const RECRUIT_NOTE = RECRUIT.length > 1 ? RECRUIT[RECRUIT.length - 1] : '';
 ---
 
-{/* ── 미션 ─────────────────────────────────────── */}
-<section class="container block" data-quiet>
-  <SectionHead
-    index="00"
-    label="MISSION"
-    title={pick(SITE.tagline, lang)}
-    lang={lang}
-    as="h2"
-  />
-  <p class="mission" lang={lang} data-reveal="">{pick(SITE.mission, lang)}</p>
-</section>
+<main class="drive" id="main">
+  {/* ① 여는 화면 — 이름이 가장 크다. 연구실 사이트에서 가장 먼저 읽혀야 하는 것. */}
+  <section class="open" data-quiet>
+    <h1 class="wordmark">{SITE.short}</h1>
+    <p class="expand">{t(SITE.expansion)}</p>
+    <p class="claim">{t(SITE.tagline)}</p>
+    <p class="lede">{t(SITE.hero)}</p>
+    <p class="ann aff">
+      {AFFIL.map((part, i) => <span>{i < AFFIL.length - 1 ? `${part},` : part}</span>)}
+    </p>
+  </section>
 
-{/* ── 연구 분야 — 옆으로 넘기는 덱 ───────────────────────────────
-    한 분야가 한 화면을 쓰고, 그 안에서 그 분야의 실제 IDM 시뮬레이션이 돌아간다.
-    설명문 대신 **돌아가는 모델**이 분야를 말한다(교수님 결정).
+  {/* ② 연구 — 한 분야가 한 화면. 시뮬레이션이 돌고, 배경 도로도 그 분야로 간다. */}
+  <section class="stage" id="research" data-road-stage>
+    {RESEARCH.map((a, i) => (
+      <article class="area" data-act={i} id={`area-${a.id}`}>
+        <span class="ghost" aria-hidden="true">{a.index}</span>
+        <div class="areaText" data-quiet>
+          {/* 여기가 어디이고 넷 중 몇 번째인지를 이 한 줄이 말한다.
+              잘려 나가는 번호는 장식이라 읽으라고 둔 것이 아니다. */}
+          <p class="ann areaAnn">
+            {t(UI.sectionResearch)} <span class="areaIdx">{a.index} / {ACT_TOTAL}</span>
+          </p>
+          <h2 class="areaName">{t(a.title)}</h2>
+          <ul class="keys">
+            {a.keywords.map((k) => <li>{k}</li>)}
+          </ul>
+        </div>
+        <div class="areaSim">
+          <TrafficSim client:visible scenario={a.scenario} lang={lang} compact />
+        </div>
+      </article>
+    ))}
+  </section>
 
-    패널에는 딱 네 가지만 둔다: 번호 / 이름 / 키워드 한 줄 / 시뮬레이션.
-    한때 여기에 배경 도로의 계측판까지 얹었는데, 옆의 시뮬과 같은 이름의 값이
-    다른 수를 가리켜 읽는 사람이 둘을 맞춰 보려 했다. 계측은 시뮬 한 곳에서만 한다.
-
-    넘김은 네이티브 가로 스크롤 + scroll-snap 이다 — 캐러셀 JS 가 없다.
-    ◂▸ 와 눈금은 그냥 `#id` 앵커라 스크립트가 죽어도 눌러서 이동한다. 넘길 수
-    있다는 것을 알리는 장치는 이 둘뿐이다(안내 문장을 대신한다).
-
-    `data-road-stage`·`data-act` 계약은 그대로다 — 배경 도로가 이 덱을 읽어
-    지금 선 패널에 맞춰 카메라를 옮기고 그 주제를 도로 위에서 연기한다. */}
-<section class="stage" data-road-stage aria-labelledby="research-head">
-  <div class="container stageHead" data-quiet>
-    <SectionHead
-      id="research-head"
-      index="01"
-      label="RESEARCH"
-      title={pick(UI.sectionResearch, lang)}
-      lang={lang}
-      as="h2"
-      meta={`${String(RESEARCH.length).padStart(2, '0')} AREAS`}
-    />
-  </div>
-
-  {/* 세로 여유 상자. 덱이 여기 붙어 있는 동안 배경 도로의 시점이 올라간다. */}
-  <div class="deckRoom" data-deck-room>
-    <div class="deck">
-      <div
-        class="track"
-        data-deck
-        tabindex="0"
-        role="group"
-        aria-label={pick(UI.sectionResearch, lang)}
-      >
-        {RESEARCH.map((area, i) => {
-          const prev = RESEARCH[i - 1];
-          const next = RESEARCH[i + 1];
-          return (
-            <article
-              class="panel"
-              id={`area-${area.id}`}
-              data-act={i}
-              style={`--k: var(--a${i}, 1)`}
-              aria-label={pick(area.title, lang)}
-            >
-              <div class="panelInner">
-                <div class="panelHead" data-quiet>
-                  <div class="panelId">
-                    <h3 class="actTitle" lang={lang}>
-                      <a href={`${href('research', lang)}#${area.id}`}>{pick(area.title, lang)}</a>
-                    </h3>
-                    <p class="keys">{area.keywords.join(' · ')}</p>
-                  </div>
-
-                  {/* 번호와 ◂▸ 를 한 덩어리로 둔다 — 이 셋이 모여야 "넷 중 하나를
-                      넘겨 보는 중"으로 읽힌다. 따로 떼어 놓으면 번호는 그냥 장식이다.
-                      끝에서는 링크가 아니라 꺼진 표시로 남는다. */}
-                  <div class="step">
-                    <p class="count" aria-hidden="true">
-                      {area.index}<span class="countOf"> / {String(RESEARCH.length).padStart(2, '0')}</span>
-                    </p>
-                    {prev ? (
-                      <a class="stepBtn" href={`#area-${prev.id}`} aria-label={pick(UI.prevArea, lang)}>◂</a>
-                    ) : (
-                      <span class="stepBtn" aria-hidden="true" data-off>◂</span>
-                    )}
-                    {next ? (
-                      <a class="stepBtn" href={`#area-${next.id}`} aria-label={pick(UI.nextArea, lang)}>▸</a>
-                    ) : (
-                      <span class="stepBtn" aria-hidden="true" data-off>▸</span>
-                    )}
-                  </div>
-                </div>
-
-                {/* 그 분야의 실제 시뮬레이션. 화면 안에 들어올 때만 하이드레이트되고,
-                    옆으로 밀려나면 훅이 rAF 를 멈춘다 — 한 번에 한 대만 돈다. */}
-                <TrafficSim client:visible scenario={area.scenario} lang={lang} compact />
-              </div>
-            </article>
-          );
-        })}
-      </div>
-
-      {/* 위치 눈금. 지금 선 자리는 배경 도로와 같은 값(`--k`)이 정한다. */}
-      <div class="container deckBar" data-quiet>
-        <ol class="ticks">
-          {RESEARCH.map((area, i) => (
-            <li class="tickItem" style={`--k: var(--a${i}, 1)`}>
-              <a class="tick" href={`#area-${area.id}`}>
-                <span class="visually-hidden">{pick(area.title, lang)}</span>
-              </a>
-            </li>
-          ))}
-        </ol>
-      </div>
+  {/* ③ 논문 — 라벨이 여백에 붙어 목록을 끝까지 따라온다(sticky). */}
+  <section class="papers" id="publications" data-quiet>
+    <div class="margin">
+      <h2 class="ann head">{t(UI.sectionPublications)}</h2>
+      <p class="count">{PUBLICATIONS.length}</p>
+      <a class="more" href={href('publications', lang)}>▸ {t(UI.seeAll)}</a>
     </div>
-  </div>
+    <div class="rails">
+      <ol class="rail">
+        {RECENT_PUBS.map((p, i) => (
+          <li class={i > 0 && RECENT_PUBS[i - 1]!.year === p.year ? 'same' : ''}>
+            <span class="year">{p.year}</span>
+            <div class="entry">
+              <p class="eTitle">{p.title}</p>
+              <p class="eVenue">{p.venue}{p.volume ? `, ${p.volume}` : ''}</p>
+            </div>
+          </li>
+        ))}
+      </ol>
+    </div>
+  </section>
 
-  <div class="container stageFoot" data-quiet>
-    <Button href={href('research', lang)}>{pick(UI.viewAll, lang)}</Button>
-  </div>
-</section>
+  {/* ④ 사람 — 사진이 점으로 해상된다. 연구실에 사람이 없으면 연구실이 아니다. */}
+  <section class="people" id="people" data-quiet>
+    <DotPortrait src={PI.photo} alt={t(PI.name)} label="prof_yu" width={3} height={4} />
+    <div class="bio">
+      <h2 class="name">{t(PI.name)}</h2>
+      <p class="lede">{t(PI.role)} · {SITE.short}</p>
+      <ol class="cv">
+        {PI.education.map((e) => (
+          <li>
+            <span class="period">{e.period}</span>
+            <span class="org">{t(e.role)} — {t(e.org)}</span>
+          </li>
+        ))}
+      </ol>
+      <a class="more" href={href('people', lang)}>▸ {t(UI.seeAll)}</a>
+    </div>
+  </section>
 
-{/* ── 최근 소식 ─────────────────────────────────── */}
-<section class="container block" data-quiet>
-  <SectionHead
-    index="05"
-    label="NEWS"
-    title={pick(UI.sectionNews, lang)}
-    lang={lang}
-    as="h2"
-    meta={`${String(NEWS.length).padStart(2, '0')} ENTRIES`}
-  />
-  <NewsTimeline items={NEWS} lang={lang} limit={3} />
-  {NEWS.length > 3 && <Button href={href('news', lang)}>{pick(UI.viewAll, lang)}</Button>}
-</section>
+  {/* ⑤ 소식 — 날짜 레일. */}
+  <section class="news" id="news" data-quiet>
+    <h2 class="ann head">{t(UI.sectionNews)}</h2>
+    <ol class="feed">
+      {RECENT_NEWS.map((n) => (
+        <li>
+          <span class="date">{fmt(n.date)}</span>
+          <div class="item">
+            <p class="nTitle">{t(n.title)}</p>
+            {n.body ? <p class="nBody">{t(n.body)}</p> : null}
+          </div>
+        </li>
+      ))}
+    </ol>
+    <a class="more" href={href('news', lang)}>▸ {t(UI.seeAll)}</a>
+  </section>
 
-{/* ── 함께하기 ─────────────────────────────────── */}
-<section class="container block" data-quiet>
-  <SectionHead
-    index="06"
-    label="JOIN US"
-    title={pick(UI.sectionJoin, lang)}
-    lang={lang}
-    as="h2"
-  />
+  {/* ⑥ 함께하기 — 모집이 이 페이지에서 가장 큰 문장이어야 한다. */}
+  <section class="join" id="join" data-quiet>
+    <p class="claim">{RECRUIT_CLAIM}</p>
+    <div class="reach">
+      {RECRUIT_NOTE ? <p class="lede note">{RECRUIT_NOTE}</p> : null}
+      <address class="where">
+        {t(SITE.contact.address)}<br />
+        <a class="mail" href={`mailto:${SITE.contact.email}`}>{SITE.contact.email}</a>
+        <span class="off"> · {SITE.contact.office}</span>
+      </address>
+    </div>
+  </section>
+</main>
 
-  <HudFrame edges={['top', 'left']} ticks label="RECRUITING" class="join">
-    <p class="joinText" lang={lang}>{pick(SITE.recruiting, lang)}</p>
-    <dl class="contact">
-      <div class="pair">
-        <dt>EMAIL</dt>
-        <dd><a class="cLink" href={`mailto:${c.email}`}>{c.email}</a></dd>
-      </div>
-      <div class="pair">
-        <dt>OFFICE</dt>
-        <dd><a class="cLink" href={`tel:${c.office.replace(/-/g, '')}`}>{c.office}</a></dd>
-      </div>
-      <div class="pair">
-        <dt>ROOM</dt>
-        <dd lang={lang}>{pick(c.room, lang)}</dd>
-      </div>
-    </dl>
-    <Button href={`mailto:${c.email}`}>{pick(UI.emailUs, lang)}</Button>
-  </HudFrame>
-</section>
+<script>
+  import { mountAllDotPortraits } from '../lib/dotPortrait';
+  mountAllDotPortraits();
+</script>
 
 <style>
-  .block {
-    display: grid;
-    gap: var(--space-4);
-    justify-items: start;
-    padding-block: var(--section-y) 0;
-  }
-
-  .mission {
-    max-width: var(--measure);
-    font-size: var(--t-lg);
-    font-weight: var(--w-light);
-    line-height: var(--lh-body);
-    color: var(--fg-mute);
-    margin: 0;
-    text-wrap: pretty;
-  }
-
-  /* ── 연구 무대 — 옆으로 넘기는 덱 ───────────────────────────────
-     덱은 세로 여유 상자(`.deckRoom`) 안에 sticky 로 붙어 있다 — 그 상자가 화면을
-     지나는 동안 배경 도로의 시점이 오르고, 지나가면 다시 내려온다. */
-
-  .stage {
-    display: grid;
-    gap: 0;
-    padding-block: var(--section-y) 0;
-  }
-
-  .stageHead { display: grid; gap: var(--space-3); justify-items: start; }
-
-  /* 덱이 화면에 붙어 있는 길이 = 이 높이 − 덱 높이. 여기를 고치면 "연구 앞에서
-     얼마나 머무는가"와 배경 시점이 오르내리는 구간이 함께 바뀐다. */
-  .deckRoom {
-    min-block-size: 150vh;
-    min-block-size: 150svh;
-    margin-block-start: var(--space-5);
-  }
-
-  .deck {
-    position: sticky;
-    /* 눈금·◂▸ 앵커를 누르면 브라우저는 대상 패널의 **윗변**을 html 의
-       `scroll-padding-block-start`(--space-8) 선에 맞추려 한다. 덱이 붙는 높이에
-       트랙 패딩을 더한 값이 정확히 그 선이어야 세로로 안 튄다 — 어긋난 만큼
-       누를 때마다 페이지가 밀린다(16px 씩 밀리는 것을 실측했다).
-       sticky 내비(≈58px)보다는 아래여야 한다. */
-    inset-block-start: calc(var(--space-8) - var(--space-2));
-    display: grid;
-    gap: var(--space-3);
-  }
-
-  /* 가로 스크롤 + 스냅. 캐러셀 JS 없음.
-     `overscroll-behavior` 를 건드리지 않는다 — `contain` 으로 막으면 트랙 끝에서
-     스크롤이 페이지로 넘어가지 못해 커서가 덱 위에 있는 동안 갇힌다. */
-  .track {
-    display: flex;
-    align-items: stretch;
-    overflow-x: auto;
-    overflow-y: hidden;
-    scroll-snap-type: x mandatory;
-    scroll-behavior: smooth;
-    scrollbar-width: none;
-    /* `overflow-y: hidden` 은 트랙 **패딩 상자**에서 자른다. 여유를 두지 않으면
-       HudFrame 의 모서리 틱과 라벨이 위아래로 반씩 잘린다(실제로 잘렸다). */
-    padding-block: var(--space-2);
-  }
-
-  .track::-webkit-scrollbar { display: none; }
-
-  /* 트랙 자체가 포커스를 받는다 — 키보드로 좌우 키를 눌러 넘길 수 있다. */
-  .track:focus-visible {
-    outline: var(--hair) solid var(--focus);
-    outline-offset: 2px;
-  }
-
-  .panel {
-    flex: 0 0 100%;
-    min-inline-size: 0;
-    scroll-snap-align: start;
-    /* 무대에 서지 않은 패널은 물러난다. JS 가 없으면 `--k` 폴백 1 — 전부 또렷하다. */
-    opacity: calc(0.3 + var(--k, 1) * 0.7);
-    transition: opacity 160ms linear;
-  }
-
-  /* `.container` 와 같은 폭·여백 — 덱만 화면 끝까지 열리고 글은 같은 기둥에 선다. */
-  .panelInner {
-    inline-size: 100%;
-    max-inline-size: calc(var(--container-max) + var(--gutter) * 2);
-    margin-inline: auto;
-    padding-inline: var(--gutter);
-    display: grid;
-    gap: var(--space-3);
-  }
-
-  .panelHead {
-    display: flex;
-    align-items: flex-end;
-    justify-content: space-between;
-    gap: var(--space-4);
-  }
-
-  .panelId { display: grid; gap: var(--space-1); min-inline-size: 0; }
-
-  .count {
-    margin: 0;
-    font-family: var(--font-mono);
-    font-size: var(--t-mono-sm);
-    letter-spacing: var(--track-label);
-    color: var(--fg);
-    font-variant-numeric: tabular-nums;
-    white-space: nowrap;
-  }
-
-  .countOf { color: var(--line-hot); }
-
-  .actTitle {
-    margin: 0;
-    font-family: var(--font-sans);
-    font-size: var(--t-h3);
-    font-weight: var(--w-light);
-    line-height: var(--lh-2);
-    letter-spacing: var(--track-heading);
-    color: var(--fg);
-    text-wrap: balance;
-  }
-
-  .actTitle a {
-    color: inherit;
-    text-decoration: none;
-    border-bottom: var(--hair) solid transparent;
-    transition: border-color var(--dur-fast) var(--ease-out);
-  }
-
-  .actTitle a:hover { border-bottom-color: var(--accent); }
-
-  /* 키워드는 한 줄이다 — 칩을 네 개 흩뿌리면 줄바꿈이 제멋대로라 정돈이 안 된다. */
-  .keys {
+  /* ---- 공통 ----------------------------------------------------------- */
+  /*
+   * 읽는 글의 한 줄 길이. 이 글꼴에서 1ch ≒ 평균 글자의 1.3배라 50ch 가 약 66자다.
+   * 크기가 다른 글에 같은 값을 물려도 **글자 수**가 같게 유지된다.
+   */
+  .drive { display: grid; --read: 50ch; }
+  .ann {
     margin: 0;
     font-family: var(--font-mono);
     font-size: var(--t-micro);
+    line-height: var(--lh-mono);
     letter-spacing: var(--track-mono);
-    text-transform: uppercase;
     color: var(--fg-mute);
   }
+  .lede { margin: 0; max-inline-size: 44ch; font-size: var(--t-base); line-height: var(--lh-body); color: var(--fg-mute); }
+  .mail { color: var(--fg); text-decoration: none; border-block-end: var(--hair) solid var(--line); }
+  .mail:hover { border-block-end-color: var(--accent); }
 
-  /* ── 넘김 ────────────────────────────────────────────────────────
-     이 사이트의 버튼 어휘(각진 1px · hover 시 배경이 아니라 테두리가 점등)를 따른다. */
-  .step {
+  /* ---- ① 여는 화면 ---------------------------------------------------- */
+  /*
+   * 간격을 grid gap 하나로 주면 다섯 줄이 등간격으로 늘어서고, 무엇이 무엇에
+   * 딸린 글인지가 사라진다. 확장명은 워드마크의 캡션이라 바짝 붙이고, 태그라인
+   * 앞에서만 크게 쉰다 — 이 한 번의 숨이 여는 화면의 뼈대다.
+   */
+  .open {
+    min-block-size: 100dvh;
+    display: grid;
+    align-content: center;
+    justify-items: start;
+    padding: var(--space-9) var(--gutter);
+    inline-size: min(46rem, 54%);
+  }
+  /* 이름이 가장 크다. 연구실 사이트에서 가장 먼저 읽혀야 하는 것이라서. */
+  .wordmark {
+    margin: 0;
+    font-family: var(--font-sans);
+    font-size: clamp(4.5rem, 2rem + 11vw, 11rem);
+    font-weight: var(--w-medium);
+    line-height: 0.86;
+    letter-spacing: -0.055em;
+    color: var(--fg);
+  }
+  .expand { margin: var(--space-2) 0 0; font-family: var(--font-mono); font-size: var(--t-mono-sm); letter-spacing: var(--track-mono); color: var(--accent); }
+  .open .claim { margin-block-start: var(--space-7); }
+  .open .lede { margin-block-start: var(--space-3); }
+  .claim {
+    margin: 0;
+    max-inline-size: 24ch;
+    font-family: var(--font-sans);
+    font-size: clamp(1.5rem, 1rem + 1.9vw, 2.6rem);
+    font-weight: var(--w-light);
+    line-height: 1.1;
+    letter-spacing: -0.03em;
+    text-wrap: balance;
+    color: var(--fg);
+  }
+  /* 소속은 쉼표 마디로만 줄이 바뀐다. 넓으면 한 줄, 좁아지면 마디가 차례로
+     내려앉아 주소처럼 쌓인다 — 마디 한가운데서 끊기는 일이 없다. */
+  .aff {
+    margin-block-start: var(--space-5);
     display: flex;
+    flex-wrap: wrap;
+    /* 모노 한 칸(0.6em)에 트래킹(0.12em)을 더한 값 — 마디 사이가 낱말 사이와 같아진다. */
+    gap: 0 0.72em;
+  }
+
+  /* ---- ② 연구 --------------------------------------------------------- */
+  .area {
+    position: relative;
+    min-block-size: 100dvh;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    align-content: center;
     align-items: center;
-    gap: var(--space-1);
-    flex: none;
+    gap: var(--space-7);
+    padding-block: var(--space-8);
+    overflow: clip; /* 화면 밖으로 잘리는 번호가 가로 스크롤을 만들지 않게 */
   }
-
-  /* 번호는 ◂▸ 보다 한 칸 떨어뜨린다 — 셋이 붙으면 번호도 버튼처럼 보인다. */
-  .count + .stepBtn { margin-inline-start: var(--space-2); }
-
-  .stepBtn {
-    display: grid;
-    place-items: center;
-    inline-size: var(--tap-min);
-    block-size: var(--tap-min);
-    border: var(--hair) solid var(--line);
-    color: var(--fg-mute);
-    font-size: var(--t-sm);
-    line-height: 1;
-    text-decoration: none;
-    transition:
-      border-color var(--dur-fast) var(--ease-out),
-      color var(--dur-fast) var(--ease-out);
+  /* 번호는 **화면 밖으로 잘린다.** 읽으라고 둔 것이 아니라 자리를 세라고 둔 것이다.
+     굵기를 한 단계 내린 이유: 이 위에 키워드 한 줄이 지나간다. */
+  .ghost {
+    position: absolute;
+    inset-block-start: 50%;
+    inset-inline-start: calc(var(--gutter) * -0.9);
+    translate: 0 -50%;
+    font-family: var(--font-sans);
+    font-size: clamp(9rem, 4rem + 20vw, 22rem);
+    font-weight: var(--w-light);
+    line-height: 0.8;
+    letter-spacing: -0.06em;
+    color: var(--line);
+    pointer-events: none;
+    user-select: none;
   }
-
-  a.stepBtn:hover,
-  a.stepBtn:focus-visible {
-    border-color: var(--accent);
-    color: var(--accent);
+  .areaText { position: relative; padding-inline-start: var(--gutter); display: grid; gap: var(--space-3); }
+  /* 넷 중 몇 번째인지가 이 줄에서 유일하게 바뀌는 값이다 — 사이를 한 칸 더 띄워 따로 읽힌다. */
+  .areaIdx { margin-inline-start: 0.9em; }
+  .areaName {
+    margin: 0;
+    font-family: var(--font-sans);
+    font-size: clamp(1.7rem, 1rem + 2.4vw, 3.1rem);
+    font-weight: var(--w-light);
+    line-height: 1.06;
+    letter-spacing: -0.03em;
+    text-wrap: balance;
+    color: var(--fg);
   }
-
-  /* 끝에 닿으면 링크가 아니라 꺼진 표시다 — 눌러도 아무 일 없는 링크를 두지 않는다. */
-  .stepBtn[data-off] { color: var(--line); }
-
-  /* ── 위치 눈금 ───────────────────────────────────────────────────
-     점(dot)이 아니라 계측 눈금이다(하드 룰 1·7). 지금 선 자리만 차오른다. */
-  .ticks {
-    display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: var(--space-2);
+  /* 키워드는 칩이 아니라 **줄바꿈되는 한 줄**이다 — 테두리를 넷씩 그리면 카드가 된다.
+     설명문이 없는 구역이라 이 줄이 곧 본문이다. 그래서 광도를 한 단계 올렸다
+     (잘려 나가는 번호 위를 지나가기도 한다). */
+  .keys {
     list-style: none;
     margin: 0;
     padding: 0;
-  }
-
-  .tick {
-    position: relative;
-    display: block;
-    block-size: 2px;
-    background-color: var(--line);
-  }
-
-  .tick::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background-color: var(--accent);
-    transform: scaleX(var(--k, 1));
-    transform-origin: left center;
-  }
-
-  /* 2px 짜리 선은 손가락으로 못 누른다 — 위아래로 보이지 않는 여유를 준다. */
-  .tick::before {
-    content: '';
-    position: absolute;
-    inset-block: calc(var(--space-2) * -1);
-    inset-inline: 0;
-  }
-
-  .stageFoot { display: grid; justify-items: start; padding-block: var(--space-6) 0; }
-
-  /* 동작 줄이기: 패널을 흐리지 않고, 넘김도 즉시 이동한다. */
-  @media (prefers-reduced-motion: reduce) {
-    .panel { opacity: 1; transition: none; }
-    .track { scroll-behavior: auto; }
-  }
-
-  /* ── 함께하기 ─────────────────────────────────── */
-
-  .join {
-    width: 100%;
-    padding: var(--space-5) var(--space-4);
-    display: grid;
-    gap: var(--space-4);
-    justify-items: start;
-  }
-
-  .joinText {
-    max-width: var(--measure);
-    font-size: var(--t-base);
-    line-height: var(--lh-body);
-    color: var(--fg-mute);
-    margin: 0;
-    text-wrap: pretty;
-  }
-
-  .contact {
-    display: grid;
-    gap: var(--space-2);
-    margin: 0;
-    width: 100%;
-  }
-
-  .pair {
-    display: grid;
-    grid-template-columns: 8ch 1fr;
-    gap: var(--space-3);
-    align-items: baseline;
-    padding-bottom: var(--space-2);
-    border-bottom: var(--hair) dotted var(--scan);
-  }
-
-  .pair dt {
+    display: flex;
+    flex-wrap: wrap;
+    /* 열 간격은 0 — 낱말 사이를 벌리는 일은 구분점이 자기 좌우 여백으로 한다.
+       gap 과 '· ' 가 겹쳐 구분점이 허공에 떠 있던 것을 고쳤다. */
+    gap: var(--space-1) 0;
     font-family: var(--font-mono);
     font-size: var(--t-micro);
-    letter-spacing: var(--track-label);
-    color: var(--fg-dim);
-  }
-
-  .pair dd {
-    margin: 0;
-    font-size: var(--t-sm);
-    color: var(--fg);
-  }
-
-  .cLink {
-    font-family: var(--font-mono);
-    font-size: var(--t-mono-sm);
+    line-height: var(--lh-mono);
     letter-spacing: var(--track-mono);
-    color: var(--fg);
-    text-decoration: none;
-    border-bottom: var(--hair) solid var(--line);
-    transition:
-      color var(--dur-fast) var(--ease-out),
-      border-color var(--dur-fast) var(--ease-out);
+    color: var(--fg-mute);
   }
-
-  .cLink:hover {
-    color: var(--accent);
-    border-bottom-color: var(--accent);
+  .keys li { white-space: nowrap; }
+  /* 구분점은 **앞 낱말에 붙는다.** `li + li::before` 로 두면 줄이 바뀔 때 점이
+     다음 줄 맨 앞에 떨어진다(02·04 막에서 실제로 그랬다). */
+  .keys li:not(:last-child)::after {
+    content: '·';
+    padding-inline: 0.7em;
+    color: var(--line-hot);
   }
+  /* 계측기는 화면 끝까지 간다 — 여백에 얹은 카드가 아니라 도로에서 잘라 온 창이다. */
+  .areaSim { min-inline-size: 0; }
+  .area:nth-of-type(even) .areaSim { order: -1; }
+  .area:nth-of-type(even) .areaText { padding-inline: 0 var(--gutter); }
+  .area:nth-of-type(even) .ghost { inset-inline: auto calc(var(--gutter) * -0.9); }
 
-  /* 좁아지면 패널이 한 화면보다 높아진다 — 덱을 붙여 두지 않는다. sticky 로 두면
-     아래쪽 시뮬이 잘린다. */
-  @media (max-width: 64rem) {
-    .deck { position: static; }
-    .deckRoom { min-block-size: 0; }
+  /* ---- ③ 논문 --------------------------------------------------------- */
+  /*
+   * 레일 폭이 곧 한 줄의 길이다. 58rem 이었을 때 제목 한 줄이 112자까지 갔다 —
+   * 눈이 다음 줄 머리를 못 찾는다. 32rem 은 제목 최장 69자다.
+   *
+   * 30·32·34·36rem 을 재 봤다. 34rem 부터 최장 줄이 75자를 넘고, 30rem 은 줄 수가
+   * 21 → 26 으로 는다. 32rem 은 줄 수는 34rem 과 같으면서 **마지막 줄이 짧게 남는
+   * 제목이 없다**(최단 꼬리 29% · 34rem 은 21%). 점선 구분자가 열 끝까지 그어지므로
+   * 이 폭은 곧 눈에 보이는 값이다.
+   */
+  .papers {
+    display: grid;
+    grid-template-columns: 12rem minmax(0, 32rem);
+    gap: var(--space-6);
+    padding: var(--section-y) var(--gutter);
   }
+  /* 라벨이 목록을 끝까지 따라온다 — 스크롤해도 무엇을 읽는 중인지 안 놓친다.
+     붙는 높이는 전역 `scroll-padding-block-start` 와 같은 값이어야 한다. */
+  .margin { position: sticky; inset-block-start: var(--space-8); align-self: start; display: grid; gap: var(--space-2); }
+  .head { color: var(--fg); }
+  .count { margin: 0; font-family: var(--font-mono); font-size: var(--t-h3); line-height: 1; color: var(--line-hot); font-variant-numeric: tabular-nums; }
+  .rails { display: grid; gap: var(--space-7); min-inline-size: 0; }
+  .rail { list-style: none; margin: 0; padding: 0; display: grid; }
+  /* 연도 칸은 rem 으로 잡는다 — `6ch` 는 상속받은 본문 크기를 따라 흔들렸다. */
+  .rail li { display: grid; grid-template-columns: 4rem minmax(0, 1fr); gap: var(--space-3); padding-block: var(--space-3); }
+  .rail li + li { border-block-start: var(--hair) dotted var(--scan); }
+  /* `.rail li` 가 특정성에서 이겨 이 패딩이 먹지 않았고, 그래서 레일 머리글이
+     왼쪽 라벨보다 24px 내려가 있었다. 같은 특정성으로 올린다. */
+  .rail li.railHead { padding-block: 0 var(--space-2); }
+  .year { font-family: var(--font-mono); font-size: var(--t-mono-sm); color: var(--fg-mute); font-variant-numeric: tabular-nums; }
+  .rail li.same .year { visibility: hidden; }
+  .eTitle { margin: 0; font-size: var(--t-sm); line-height: var(--lh-2); letter-spacing: -0.008em; color: var(--fg); }
+  .eVenue { margin: var(--space-05) 0 0; font-family: var(--font-mono); font-size: var(--t-micro); line-height: var(--lh-mono); color: var(--fg-mute); }
 
-  @media (max-width: 40rem) {
-    .panelHead {
-      align-items: flex-start;
-      gap: var(--space-2);
+  /* ---- ④ 사람 --------------------------------------------------------- */
+  /*
+   * 사진 칸은 사진과 같은 폭(12rem ≒ DotPortrait 의 190px 상한)으로 줄였다.
+   * 22rem 이었을 때 162px 이 빈 채로 남아 약력이 오른쪽으로 밀려 있었는데,
+   * 12rem 으로 맞추면 약력의 왼쪽 모서리가 **논문 레일의 시작선과 겹친다.**
+   */
+  .people {
+    display: grid;
+    grid-template-columns: 12rem minmax(0, 46rem);
+    align-items: start;
+    gap: var(--space-6);
+    padding: var(--section-y) var(--gutter);
+  }
+  .bio { display: grid; gap: var(--space-3); }
+  .name { margin: 0; font-family: var(--font-sans); font-size: clamp(1.8rem, 1rem + 2.6vw, 3.2rem); font-weight: var(--w-light); line-height: 1; letter-spacing: -0.035em; color: var(--fg); }
+  .cv { list-style: none; margin: var(--space-2) 0 0; padding: 0; display: grid; gap: var(--space-2); }
+  .cv li { display: grid; grid-template-columns: 6rem minmax(0, 1fr); gap: var(--space-3); font-size: var(--t-sm); line-height: var(--lh-2); color: var(--fg-mute); }
+  /* 세 줄이 모두 "… Civil and Environmental / Engineering" 으로 끝났다. */
+  .org { text-wrap: pretty; }
+  .period { font-family: var(--font-mono); font-size: var(--t-micro); line-height: var(--lh-2); color: var(--fg-dim); font-variant-numeric: tabular-nums; }
+
+  /* ---- ⑤ 소식 --------------------------------------------------------- */
+  .news { display: grid; gap: var(--space-5); padding: var(--section-y) var(--gutter); }
+  .feed { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-6); max-inline-size: 46rem; }
+  .feed li { display: grid; grid-template-columns: 6.5rem minmax(0, 1fr); gap: var(--space-3); }
+  .date { font-family: var(--font-mono); font-size: var(--t-micro); line-height: var(--lh-2); color: var(--fg-mute); font-variant-numeric: tabular-nums; }
+  .nTitle { margin: 0; max-inline-size: var(--read); font-size: var(--t-base); line-height: var(--lh-2); letter-spacing: -0.012em; color: var(--fg); }
+  .nBody { margin: var(--space-2) 0 0; max-inline-size: var(--read); font-size: var(--t-sm); line-height: var(--lh-body); color: var(--fg-mute); }
+
+  /* ---- ⑥ 함께하기 ----------------------------------------------------- */
+  .join {
+    min-block-size: 80dvh;
+    display: grid;
+    align-content: center;
+    gap: var(--space-6);
+    padding: var(--space-9) var(--gutter);
+    inline-size: min(52rem, 62%);
+    justify-self: end;
+  }
+  /* 26ch 에서는 네 줄이 되고 둘째 줄만 'graduate/undergraduate' 하나로 짧게 남았다.
+     30ch 은 세 줄이고, 짧은 줄이 **첫 줄**로 간다 — 가운데가 파이지 않는다. */
+  .join .claim { max-inline-size: 30ch; }
+  /* 안내문과 주소는 한 덩어리다 — "아래의 메일"이 가리키는 것이 바로 아랫줄이다. */
+  .reach { display: grid; gap: var(--space-3); }
+  .where { font-style: normal; font-family: var(--font-mono); font-size: var(--t-micro); line-height: var(--lh-mono); letter-spacing: var(--track-mono); color: var(--fg-mute); }
+  .where .off { color: var(--fg-dim); }
+
+  /* ---- 좁은 화면 ------------------------------------------------------ */
+  /*
+   * 한 열로 접히면 **구역의 경계가 사라진다.** 넓은 화면에서는 두 칸 배치와
+   * 여백에 붙은 라벨이 "여기서 다른 것이 시작한다"를 말했는데, 세로로 쌓고 나면
+   * 남는 신호가 빈 띠 하나뿐이다. 그래서 구역 사이가 위아래 80px 씩 160px 로
+   * 벌어져 있었고, 390px 에서 그 띠가 화면의 5분의 1이었다.
+   *
+   * 빈 띠를 키우는 대신 **점선 스캔 라인 한 줄**을 긋고 여백을 줄인다 —
+   * 160px 의 허공이 하던 일을 1px 이 한다. 이 페이지의 논문 레일이 이미 같은
+   * 점선을 쓰고 있어서, 새 어휘를 들여오는 것이 아니라 쓰던 것을 키운 것이다.
+   */
+  @media (max-width: 62rem) {
+    .area,
+    .papers,
+    .people,
+    .news,
+    .join { border-block-start: var(--hair) dotted var(--scan); }
+    /* 선은 **뒤에 오는 것에 붙는다** — 위가 좁고 아래가 넓어야 '끝'이 아니라
+       '시작'으로 읽힌다. 경계 총합 160px → 104px. */
+    .area,
+    .papers,
+    .people,
+    .news { padding-block: var(--space-5) var(--space-7); }
+
+    .area { grid-template-columns: minmax(0, 1fr); gap: var(--space-5); min-block-size: auto; }
+    .area .areaText, .area:nth-of-type(even) .areaText { padding-inline: var(--gutter); }
+    /*
+     * 계측기는 좁은 화면에서 **여백을 지킨다.** 넓은 화면에서 화면 끝까지 가는
+     * 이유는 두 칸 중 바깥 칸이라 "도로에서 잘라 온 창"으로 읽히기 때문인데,
+     * 한 열에서는 잘릴 변이 좌우 둘 다라 네 귀퉁이 틱이 전부 날아간다 —
+     * 그러면 계측기가 아니라 그냥 캔버스다. 틱이 곧 이 상자의 정체다.
+     */
+    .area .areaSim, .area:nth-of-type(even) .areaSim { order: 0; padding-inline: var(--gutter); }
+    /*
+     * 잘려 나가는 번호는 **좁은 화면에서 지운다.**
+     *
+     * 그 장치는 좌우 변에서 잘려야 "한 화면에 담기지 않는 크기"로 읽힌다.
+     * 한 열로 접히면 잘리는 변이 구역의 위끝뿐이라, 구역 사이 허공에 밑동만
+     * 남은 글자가 뜬다(03·04 막에서 특히 파편으로 보였다). 하는 일 — 새 분야가
+     * 여기서 시작한다 — 은 위의 스캔 라인과 `Research 01 / 04` 가 이미 한다.
+     * 읽을 것은 `.ann` 에 그대로 있으므로 지워도 정보가 줄지 않는다.
+     */
+    .ghost { display: none; }
+
+    .papers, .people { grid-template-columns: minmax(0, 1fr); }
+    /* 라벨과 편수는 한 줄이다 — 세로로 쌓으면 목록 앞에 계단이 하나 더 생긴다.
+       여백에 세워 두던 큰 숫자가 아니라 라벨에 딸린 계측값이 되므로, 크기를
+       내리고 광도는 올린다(--line-hot 은 본문 크기에서 거의 안 보인다). */
+    .margin { position: static; display: flex; align-items: baseline; gap: 0.9em; }
+    .count { font-size: var(--t-h4); color: var(--fg-dim); }
+    /*
+     * 레일을 세로로 접는다. 390px 에서 연도·날짜 칸이 가로의 3분의 1을 먹어
+     * 제목이 한 줄에 30자밖에 못 들어갔다 — 접으면 45자가 된다.
+     * 연도가 반복되는 행은 자리까지 없앤다(넓은 화면에서는 자리만 비운다).
+     * 학력도 같은 모양으로 접는다 — 기간 칸(6rem)이 96px 을 먹어 세 줄이 모두
+     * "… Civil and / Environmental Engineering" 으로 두 줄이 되던 자리다.
+     */
+    .rail li, .feed li, .cv li { grid-template-columns: minmax(0, 1fr); gap: var(--space-1); }
+    .rail li.railHead .year, .rail li.same .year { display: none; }
+    /* 행 상하 24px 은 11편에서 순수한 공백만 528px 이다. 행을 가르는 것은
+       점선이지 공백이 아니므로 16px 로 내린다. */
+    .rail li { padding-block: var(--space-2); }
+    .cv { gap: var(--space-3); }
+    .people { gap: var(--space-5); }
+
+    /*
+     * 여는 화면은 한 화면을 통째로 쓴다. `min-block-size: auto` 였을 때는
+     * 556px 로 끝나 스크롤 첫 손짓에 이미 연구 구역이 들어와 있었고, 위로는
+     * 고정된 색인에서 37px 밖에 안 떨어져 있었다 — 숨 쉴 자리가 없었다.
+     * `svh` 를 쓰는 이유: 주소창이 보이는 상태의 높이라 어떤 경우에도 넘치지 않는다.
+     */
+    .open {
+      inline-size: 100%;
+      min-block-size: 100svh;
+      padding-block: var(--space-9) var(--space-8);
+    }
+    /* 닫는 문장만 선 아래 여백이 한 칸 넓다(40 → 64px). 다른 구역은 선 바로 밑에
+       10px 짜리 모노 라벨이 오지만 여기는 이 페이지에서 가장 큰 문장이 온다 —
+       큰 글씨는 같은 간격에서 선에 더 붙어 보인다. 같은 값이 같은 여백은 아니다. */
+    .join {
+      inline-size: 100%;
+      justify-self: stretch;
+      min-block-size: auto;
+      padding-block: var(--space-7) var(--space-9);
     }
 
-    .keys { text-wrap: pretty; }
+    /* 모서리 색인을 본문 여백선에 맞춘다 — 24px 에 두면 MAIA 가 워드마크보다
+       4px 밖으로 나가 두 개의 왼쪽 모서리가 생긴다. */
+    /*
+     * 터치에서는 글자 상자가 곧 과녁이 아니다 — 10px 모노 한 줄은 높이 15px 라
+     * 44px 규격의 3분의 1이다. 레이아웃을 흔들지 않으려고 **자리를 차지하지 않는**
+     * `::after` 로 과녁만 넓힌다(패딩으로 넓히면 baseline 정렬이 밀린다).
+     */
   }
+  @media (max-width: 34rem) {
+    /*
+     * 세로로 든 전화기에서는 항목 여섯이 한 줄에 안 들어간다. 390px 에서 한 줄에
+     * 들어가기는 했는데 남는 폭이 0 이었고(실측 350 중 350), 320px 에서는 넘쳐서
+     * `EN / KO` 한 덩어리만 왼쪽 아래로 떨어져 나가 미아가 됐다.
+     *
+     * 흐르는 대로 두지 않고 **두 줄로 짠다.** 윗줄은 이름과 언어 — 넓은 화면의
+     * 양 끝 배치 그대로다. 아랫줄은 색인 넷. 그래서 링크는 전부 아랫줄에만 있고,
+     * 위에서 넓힌 44px 과녁이 윗줄 항목과 겹칠 일이 없다.
+     * (`order: 1` 로 색인을 언어 뒤로 보내고, `flex-basis: 100%` 로 한 줄을 통째로
+     * 차지하게 해 항상 같은 자리에서 접히게 한다.)
+     */
+  }
+  /* 전체 목록으로 가는 링크 — 홈의 구역은 요약이라 나가는 문이 하나씩 필요하다. */
+  .more {
+    justify-self: start;
+    margin-block-start: var(--space-2);
+    font-family: var(--font-mono);
+    font-size: var(--t-micro);
+    letter-spacing: var(--track-mono);
+    color: var(--fg-mute);
+    text-decoration: none;
+    border-block-end: var(--hair) solid transparent;
+    transition: color 160ms linear, border-color 160ms linear;
+  }
+  .more:hover,
+  .more:focus-visible {
+    color: var(--fg);
+    border-block-end-color: var(--accent);
+  }
+  .papers .more { margin-block-start: var(--space-3); }
 </style>

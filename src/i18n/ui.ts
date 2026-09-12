@@ -77,6 +77,9 @@ export const UI = {
   prevArea: { en: 'Previous area', ko: '이전 분야' },
   nextArea: { en: 'Next area', ko: '다음 분야' },
 
+  /** 홈의 요약 구역에서 전체 목록 페이지로 가는 링크. */
+  seeAll: { en: 'See all', ko: '전체 보기' },
+
   // 섹션 헤더
   sectionMission: { en: 'Mission', ko: '연구 방향' },
   sectionResearch: { en: 'Research', ko: '연구 분야' },

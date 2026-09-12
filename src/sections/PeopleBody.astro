@@ -1,68 +1,494 @@
 ---
-import SectionHead from '../components/SectionHead';
-import PersonCard from '../components/PersonCard';
-import HudFrame from '../components/HudFrame';
-import Button from '../components/Button';
+/*
+ * 구성원 — 한 사람의 조서(dossier).
+ *
+ * 홈의 사람 구역은 이름 · 직함 · 학력 세 줄짜리 **요약**이다. 여기는 경력까지
+ * 펼친 본론이라, 글이 한 화면보다 길다. 그래서 뼈대를 이렇게 잡았다:
+ *
+ *   · **신원 레일이 왼쪽 여백에 붙어 따라온다**(sticky). 사진 · 로마자 표기 ·
+ *     재임 기간 · 메일. 조서를 어디까지 읽든 "누구의 기록인가"가 화면에 남는다.
+ *   · 오른쪽은 **한 줄기 흐름**이다 — 이름 → 직함 → 소속 → 학력 레일 → 경력 레일.
+ *     학력·경력은 기간이 왼쪽에 서는 같은 레일이라 두 이력을 눈으로 겹쳐 볼 수 있다.
+ *   · 마지막은 **빈 명단**이다. 연구실은 2026년 3월에 문을 열었고 구성원이 아직
+ *     없다. 숫자를 `00` 으로 정직하게 찍고, 그 자리에 모집 문안을 둔다 — 빈 칸을
+ *     감추지 않는 것이 신생 연구실의 사실이다.
+ *
+ * 카드(HudFrame)를 쓰지 않는다. 이 페이지의 글은 도로 위에 그대로 앉고,
+ * 가독성은 `data-quiet` 가 점군을 성기게 만들어 낸다(판 금지).
+ *
+ * 사진의 dot 해상은 React 없이 `src/lib/dotPortrait.ts` 가 구동한다 — 이 페이지의
+ * 유일한 인터랙션이라 런타임을 실을 이유가 없다.
+ */
+import DotPortrait from '../components/DotPortrait';
 import { PI, MEMBERS, ALUMNI } from '../data/people';
 import { SITE } from '../data/site';
 import { pick, type Lang } from '../i18n';
 import { UI } from '../i18n/ui';
 
-interface Props { lang: Lang }
+interface Props {
+  lang: Lang;
+}
 const { lang } = Astro.props;
+
+const t = (v: Parameters<typeof pick>[0]) => pick(v, lang);
+
+/** PI 를 포함한 인원. 비어 있는 명단은 `00` 으로 찍는다 — 감추지 않는다. */
+const HEADCOUNT = String(1 + MEMBERS.length).padStart(2, '0');
+const nn = (n: number) => String(n).padStart(2, '0');
+
+const CV = [
+  { label: UI.education, entries: PI.education ?? [] },
+  { label: UI.experience, entries: PI.experience ?? [] },
+].filter((s) => s.entries.length > 0);
 ---
 
-<section class="container section" data-quiet>
-  <SectionHead
-    as="h1"
-    index="02"
-    label="PEOPLE"
-    title={pick(UI.sectionPeople, lang)}
-    lang={lang}
-    meta={`${String(1 + MEMBERS.length).padStart(2, '0')} MEMBERS`}
-  />
+<div class="page">
+  <header class="lead" data-quiet>
+    <h1 class="title">{t(UI.sectionPeople)}</h1>
+    <p class="tally"><span class="tallyNo">{HEADCOUNT}</span></p>
+  </header>
 
-  <PersonCard person={PI} lang={lang} detailed />
-
-  <div class="stack">
-    <SectionHead index="02.1" label="MEMBERS" title={pick(UI.members, lang)} lang={lang} as="h2" />
-
-    {MEMBERS.length > 0 ? (
-      <div class="grid">
-        {MEMBERS.map((m) => <PersonCard person={m} lang={lang} />)}
-      </div>
-    ) : (
-      <HudFrame edges={['top', 'left']} ticks label="RECRUITING" class="empty">
-        <p class="emptyText" lang={lang}>{pick(UI.membersEmpty, lang)}</p>
-        <p class="emptyText" lang={lang}>{pick(SITE.recruiting, lang)}</p>
-        <Button href={`mailto:${SITE.contact.email}`}>{pick(UI.emailUs, lang)}</Button>
-      </HudFrame>
-    )}
-  </div>
-
-  {ALUMNI.length > 0 && (
-    <div class="stack">
-      <SectionHead index="02.2" label="ALUMNI" title={pick(UI.alumni, lang)} lang={lang} as="h2" />
-      <div class="grid">
-        {ALUMNI.map((m) => <PersonCard person={m} lang={lang} />)}
-      </div>
+  <article class="dossier">
+    {/* 신원 레일 — 조서를 읽는 내내 여백에 붙어 따라온다. */}
+    <div class="ident" data-quiet>
+      {
+        PI.photo ? (
+          <DotPortrait
+            src={PI.photo}
+            alt={t(PI.name)}
+            label={PI.id.replace(/-/g, '_')}
+            width={3}
+            height={4}
+          />
+        ) : null
+      }
+      <p class="ann latin">{PI.latin}</p>
+      {PI.since ? <p class="ann since">{PI.since}</p> : null}
+      {
+        PI.email ? (
+          <a class="mail" href={`mailto:${PI.email}`}>
+            {PI.email}
+          </a>
+        ) : null
+      }
     </div>
-  )}
-</section>
 
-{/*
-  인물 사진의 dot 해상 효과. React 없이 구동한다 —
-  이 페이지의 유일한 인터랙션이라 런타임을 실을 이유가 없다 (AGENTS.md "아일랜드 최소화").
-*/}
+    <div class="stream" data-quiet>
+      <p class="ann standing">{t(UI.principalInvestigator)}</p>
+      <h2 class="name">{t(PI.name)}</h2>
+      <p class="role">{t(PI.role)}</p>
+      {PI.affiliation ? <p class="affil">{t(PI.affiliation)}</p> : null}
+
+      {
+        CV.map((block) => (
+          <section class="cvBlock">
+            <h3 class="strip">
+              <span class="stripLabel">{t(block.label)}</span>
+              <span class="rule" aria-hidden="true" />
+              <span class="stripNo">{nn(block.entries.length)}</span>
+            </h3>
+
+            <ol class="cv">
+              {block.entries.map((e) => (
+                <li>
+                  <span class="period">{e.period}</span>
+                  <div class="entry">
+                    <p class="eOrg">
+                      {t(e.role)} — {t(e.org)}
+                    </p>
+                    {e.detail ? <p class="eDetail">{t(e.detail)}</p> : null}
+                    {e.advisor ? (
+                      <p class="ann eAdvisor">
+                        {t(UI.advisor)}: {e.advisor}
+                      </p>
+                    ) : null}
+                  </div>
+                </li>
+              ))}
+            </ol>
+          </section>
+        ))
+      }
+    </div>
+  </article>
+
+  {/* 빈 명단 — 숫자를 감추지 않고, 그 자리에 모집 문안을 둔다. */}
+  <section class="roster" data-quiet>
+    <h2 class="strip">
+      <span class="stripLabel">{t(UI.members)}</span>
+      <span class="rule" aria-hidden="true"></span>
+      <span class="stripNo">{nn(MEMBERS.length)}</span>
+    </h2>
+
+    {
+      MEMBERS.length > 0 ? (
+        <ol class="cv">
+          {MEMBERS.map((m) => (
+            <li>
+              <span class="period">{m.since ?? ''}</span>
+              <div class="entry">
+                <p class="eOrg">{t(m.name)}</p>
+                <p class="eDetail">{t(m.role)}</p>
+              </div>
+            </li>
+          ))}
+        </ol>
+      ) : (
+        <div class="open">
+          <p class="openText">{t(UI.membersEmpty)}</p>
+          <p class="openText">{t(SITE.recruiting)}</p>
+          <a class="reach" href={`mailto:${SITE.contact.email}`}>
+            <span aria-hidden="true">▸</span> {t(UI.emailUs)}
+          </a>
+        </div>
+      )
+    }
+  </section>
+
+  {
+    ALUMNI.length > 0 ? (
+      <section class="roster" data-quiet>
+        <h2 class="strip">
+          <span class="stripLabel">{t(UI.alumni)}</span>
+          <span class="rule" aria-hidden="true" />
+          <span class="stripNo">{nn(ALUMNI.length)}</span>
+        </h2>
+        <ol class="cv">
+          {ALUMNI.map((m) => (
+            <li>
+              <span class="period">{m.since ?? ''}</span>
+              <div class="entry">
+                <p class="eOrg">{t(m.name)}</p>
+                <p class="eDetail">{t(m.role)}</p>
+              </div>
+            </li>
+          ))}
+        </ol>
+      </section>
+    ) : null
+  }
+</div>
+
 <script>
   import { mountAllDotPortraits } from '../lib/dotPortrait';
   mountAllDotPortraits();
 </script>
 
 <style>
-  .section { display: grid; gap: var(--space-7); padding-block: var(--space-7) var(--section-y); }
-  .stack { display: grid; gap: var(--space-4); }
-  .grid { display: grid; gap: var(--space-4); grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr)); }
-  .empty { padding: var(--space-5) var(--space-4); display: grid; gap: var(--space-3); justify-items: start; }
-  .emptyText { max-width: var(--measure); font-size: var(--t-sm); line-height: var(--lh-body); color: var(--fg-mute); margin: 0; text-wrap: pretty; }
+  .page {
+    display: grid;
+    inline-size: min(100%, 64rem);
+    padding-inline: var(--gutter);
+  }
+
+  .ann {
+    margin: 0;
+    font-family: var(--font-mono);
+    font-size: var(--t-micro);
+    line-height: var(--lh-mono);
+    letter-spacing: var(--track-mono);
+    color: var(--fg-mute);
+  }
+
+  /* ---- 머리 ----------------------------------------------------------- */
+  /* 제목과 인원수만. 눈썹줄도 제목 밑 실선도 없다 — 아래의 조서가 곧 본문이다. */
+  .lead {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-4);
+    padding-block: var(--space-9) var(--space-7);
+  }
+  .title {
+    margin: 0;
+    font-family: var(--font-sans);
+    font-size: clamp(2.6rem, 1.4rem + 4.6vw, 5.5rem);
+    font-weight: var(--w-thin);
+    line-height: 0.92;
+    letter-spacing: -0.045em;
+    color: var(--fg);
+  }
+  .tally {
+    margin: 0;
+    font-family: var(--font-mono);
+    font-size: var(--t-h4);
+    line-height: 1;
+    letter-spacing: var(--track-mono);
+    color: var(--line-hot);
+    font-variant-numeric: tabular-nums;
+  }
+  .tallyNo {
+    color: var(--fg-dim);
+  }
+
+  /* ---- 조서 ----------------------------------------------------------- */
+  .dossier {
+    display: grid;
+    grid-template-columns: 16rem minmax(0, 1fr);
+    align-items: start;
+    gap: var(--space-6);
+    padding-block-end: var(--space-8);
+  }
+
+  /*
+   * 신원 레일. 붙는 높이는 전역 `scroll-padding-block-start` 와 같은 값이어야
+   * 앵커로 뛰어들어도 레일이 색인 줄에 겹치지 않는다.
+   */
+  .ident {
+    position: sticky;
+    inset-block-start: var(--space-8);
+    align-self: start;
+    display: grid;
+    justify-items: start;
+    gap: var(--space-2);
+  }
+  /*
+   * 사진은 `DotPortrait` 의 CSS 모듈이 190px 로 묶어 둔 것을 이 페이지에서만
+   * 푼다. 홈에서는 도로 옆 요약이라 190px 이 맞지만, 여기서는 사진이 이 페이지의
+   * 유일한 그림이고 왼쪽 기둥 전체를 쓴다. `:global()` 로 열되 `.ident` 안으로
+   * 한정해 다른 페이지에는 번지지 않는다.
+   */
+  .ident :global([data-dot-wrap]) {
+    max-inline-size: 100%;
+  }
+  /* 로마자 표기와 재임 기간. `--fg-dim` 은 대비 3.4:1 이라 도로 위에서 사라진다 —
+     장식이 아니라 읽는 정보이므로 캡션 광도(7.6:1)로 올린다. */
+  .latin,
+  .since {
+    color: var(--fg-mute);
+    font-variant-numeric: tabular-nums;
+  }
+  .latin {
+    margin-block-start: var(--space-1);
+  }
+  .mail {
+    position: relative;
+    font-family: var(--font-mono);
+    font-size: var(--t-mono-sm);
+    letter-spacing: var(--track-mono);
+    color: var(--fg);
+    text-decoration: none;
+    border-block-end: var(--hair) solid var(--line);
+    transition: border-color var(--dur-fast) var(--ease-out);
+  }
+  .mail:hover,
+  .mail:focus-visible {
+    border-block-end-color: var(--accent);
+  }
+
+  /* 손가락 과녁 44px. 여백으로 키우면 밑줄이 글자에서 떨어지므로 자리를
+     차지하지 않는 겹침 상자로 키운다(모서리 색인·푸터와 같은 규칙). */
+  @media (pointer: coarse) {
+    .mail::after {
+      content: '';
+      position: absolute;
+      inset: 50% 0 auto;
+      block-size: var(--tap-min);
+      inline-size: 100%;
+      min-inline-size: var(--tap-min);
+      translate: 0 -50%;
+    }
+  }
+
+  .stream {
+    display: grid;
+    justify-items: start;
+    gap: var(--space-2);
+    min-inline-size: 0;
+  }
+  .standing {
+    color: var(--fg-dim);
+  }
+  .name {
+    margin: 0;
+    font-family: var(--font-sans);
+    font-size: clamp(2rem, 1.2rem + 2.8vw, 3.4rem);
+    font-weight: var(--w-light);
+    line-height: 1;
+    letter-spacing: -0.035em;
+    color: var(--fg);
+  }
+  .role {
+    margin: 0;
+    font-size: var(--t-lg);
+    line-height: var(--lh-2);
+    color: var(--fg);
+  }
+  .affil {
+    margin: 0;
+    max-inline-size: 44ch;
+    font-size: var(--t-sm);
+    line-height: var(--lh-body);
+    color: var(--fg-mute);
+    text-wrap: pretty;
+  }
+
+  /* ---- 계측 스트립 ---------------------------------------------------- */
+  /*
+   * 라벨 → 점선 → 수. 선을 글자 뒤에서 시작하므로 라벨 뒤에 깔 불투명 면이
+   * 필요 없다(면을 깔면 도로가 직각으로 잘린다).
+   */
+  .strip {
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.7em;
+    inline-size: 100%;
+    font-family: var(--font-mono);
+    font-size: var(--t-micro);
+    font-weight: var(--w-mono);
+    line-height: var(--lh-mono);
+    letter-spacing: var(--track-label);
+    text-transform: uppercase;
+    color: var(--fg-mute);
+    font-variant-numeric: tabular-nums;
+  }
+  .rule {
+    flex: 1 1 auto;
+    min-inline-size: 2rem;
+    block-size: 0;
+    border-block-start: var(--hair) dotted var(--scan);
+  }
+  .stripNo {
+    color: var(--fg-dim);
+  }
+  /*
+   * 모노 계측 라벨 안의 한글. 모노 글꼴에는 한글이 없어 본문 글꼴로 떨어지는데,
+   * 라틴 대문자용으로 잡은 넓은 트래킹(0.18em)이 그대로 걸리면 글자가 흩어진다
+   * (`연구실 구성원` 이 `연 구 실  구 성 원` 으로 읽혔다). global.css 의
+   * `.mono:lang(ko)` 와 같은 값으로 되돌린다.
+   */
+  .strip:lang(ko) {
+    letter-spacing: 0.04em;
+  }
+
+  .cvBlock {
+    display: grid;
+    gap: var(--space-3);
+    inline-size: 100%;
+    margin-block-start: var(--space-5);
+  }
+
+  /* ---- 이력 레일 ------------------------------------------------------- */
+  .cv {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+  }
+  .cv li {
+    display: grid;
+    grid-template-columns: 8rem minmax(0, 1fr);
+    gap: var(--space-3);
+    padding-block: var(--space-3);
+  }
+  .cv li + li {
+    border-block-start: var(--hair) dotted var(--scan);
+  }
+  .period {
+    font-family: var(--font-mono);
+    font-size: var(--t-micro);
+    line-height: var(--lh-2);
+    letter-spacing: var(--track-mono);
+    color: var(--fg-dim);
+    font-variant-numeric: tabular-nums;
+  }
+  .entry {
+    display: grid;
+    gap: var(--space-05);
+    min-inline-size: 0;
+  }
+  /* 세 줄이 모두 "… Civil and Environmental / Engineering" 으로 끝나던 자리. */
+  .eOrg {
+    margin: 0;
+    font-size: var(--t-base);
+    line-height: var(--lh-2);
+    color: var(--fg);
+    text-wrap: pretty;
+  }
+  .eDetail {
+    margin: 0;
+    max-inline-size: 52ch;
+    font-size: var(--t-sm);
+    line-height: var(--lh-body);
+    color: var(--fg-mute);
+    text-wrap: pretty;
+  }
+  .eAdvisor {
+    color: var(--fg-dim);
+  }
+
+  /* ---- 명단 ----------------------------------------------------------- */
+  .roster {
+    display: grid;
+    gap: var(--space-4);
+    padding-block: var(--space-7) var(--space-8);
+  }
+  .open {
+    display: grid;
+    justify-items: start;
+    gap: var(--space-3);
+  }
+  .openText {
+    margin: 0;
+    max-inline-size: 54ch;
+    font-size: var(--t-base);
+    line-height: var(--lh-body);
+    color: var(--fg-mute);
+    text-wrap: pretty;
+  }
+  /* 버튼 어휘 — 사각 1px, 모노 대문자, ▸. hover 에서 배경이 아니라 테두리가 점등한다. */
+  .reach {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6em;
+    min-block-size: var(--tap-min);
+    padding-inline: var(--space-2);
+    border: var(--hair) solid var(--line);
+    font-family: var(--font-mono);
+    font-size: var(--t-mono-sm);
+    font-weight: var(--w-mono-em);
+    letter-spacing: var(--track-mono);
+    text-transform: uppercase;
+    color: var(--fg-mute);
+    text-decoration: none;
+    transition:
+      border-color var(--dur-fast) var(--ease-out),
+      color var(--dur-fast) var(--ease-out);
+  }
+  .reach:hover,
+  .reach:focus-visible {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  /* ---- 좁은 화면 ------------------------------------------------------ */
+  @media (max-width: 62rem) {
+    .lead {
+      padding-block: var(--space-8) var(--space-5);
+    }
+    /*
+     * 신원 레일을 풀어 위로 올린다. 한 열에서 sticky 는 화면 절반을 사진에 내주고,
+     * 사진도 기둥 폭을 다 먹으면 첫 화면이 통째로 초상화가 된다 — 190px 로 되돌린다.
+     */
+    .dossier {
+      grid-template-columns: minmax(0, 1fr);
+      gap: var(--space-5);
+    }
+    .ident {
+      position: static;
+      grid-auto-flow: row;
+    }
+    .ident :global([data-dot-wrap]) {
+      max-inline-size: 190px;
+    }
+    /* 기간 칸(128px)이 좁은 화면에서 본문을 30자까지 눌렀다 — 위아래로 접는다. */
+    .cv li {
+      grid-template-columns: minmax(0, 1fr);
+      gap: var(--space-1);
+      padding-block: var(--space-2);
+    }
+    .roster {
+      padding-block: var(--space-6) var(--space-7);
+    }
+  }
 </style>

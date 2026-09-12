@@ -1,53 +1,270 @@
 ---
-import SectionHead from '../components/SectionHead';
-import PublicationList from '../components/PublicationList';
-import { byKind, PUBLICATIONS } from '../data/publications';
+/*
+ * 논문 — 서지 대장(ledger).
+ *
+ * 홈의 논문 구역은 최근 다섯 편을 제목·게재처만으로 훑는 **요약**이고, 라벨이
+ * 여백에 붙어 따라온다. 여기는 전체 목록이라 저자까지 싣고, 뼈대를 뒤집었다:
+ *
+ *   · **머리에 큰 제목 하나, 그 아래로 계측 스트립이 종류를 연다.**
+ *     `JOURNAL ARTICLES ·········· 06` — 라벨은 모노 계측 표기이고, 점선이 열
+ *     끝까지 간다. 종류 제목을 큰 sans 로 세우면 페이지 안에 제목이 셋이 되어
+ *     (논문 / 저널 논문 / 학술대회) 어디가 시작인지 흐려진다.
+ *   · 행은 **로그 행**이다 — 연도 레일 · 본문 · 오른쪽 끝의 일련번호. 같은 연도가
+ *     이어지면 연도 자리를 비운다(홈의 레일과 같은 규칙).
+ *   · 일련번호는 내림차순이다. 목록의 길이와 지금 어디쯤인지가 함께 읽힌다.
+ *
+ * 서지정보는 번역하지 않는다 — 저자·제목·학술지명은 양쪽 로케일에서 같다.
+ * 연구실 저자는 밝게 찍어 목록에서 눈으로 바로 찾게 한다.
+ */
+import { LAB_AUTHORS } from '../data/people';
+import { byKind, citation, PUBLICATIONS } from '../data/publications';
 import { pick, type Lang } from '../i18n';
 import { UI } from '../i18n/ui';
 
-interface Props { lang: Lang }
+interface Props {
+  lang: Lang;
+}
 const { lang } = Astro.props;
 
-const journals = byKind('journal');
-const conferences = byKind('conference');
+const t = (v: Parameters<typeof pick>[0]) => pick(v, lang);
+const nn = (n: number) => String(n).padStart(2, '0');
+
+const GROUPS = [
+  { id: 'journal', label: UI.journalArticles, items: byKind('journal') },
+  { id: 'conference', label: UI.conferencePapers, items: byKind('conference') },
+].filter((g) => g.items.length > 0);
 ---
 
-<section class="container section" data-quiet>
-  <SectionHead
-    as="h1"
-    index="03"
-    label="PUBLICATIONS"
-    title={pick(UI.sectionPublications, lang)}
-    lang={lang}
-    meta={`${String(PUBLICATIONS.length).padStart(2, '0')} TOTAL`}
-  />
+<div class="page">
+  <header class="lead" data-quiet>
+    <h1 class="title">{t(UI.sectionPublications)}</h1>
+    <p class="tally">{nn(PUBLICATIONS.length)}</p>
+  </header>
 
-  <div class="stack">
-    <SectionHead
-      index="03.1"
-      label="JOURNAL"
-      title={pick(UI.journalArticles, lang)}
-      lang={lang}
-      as="h2"
-      meta={`${String(journals.length).padStart(2, '0')}`}
-    />
-    <PublicationList items={journals} lang={lang} />
-  </div>
+  {
+    GROUPS.map((g) => (
+      <section class="group" id={g.id} data-quiet>
+        <h2 class="strip">
+          <span class="stripLabel">{t(g.label)}</span>
+          <span class="rule" aria-hidden="true" />
+          <span class="stripNo">{nn(g.items.length)}</span>
+        </h2>
 
-  <div class="stack">
-    <SectionHead
-      index="03.2"
-      label="CONFERENCE"
-      title={pick(UI.conferencePapers, lang)}
-      lang={lang}
-      as="h2"
-      meta={`${String(conferences.length).padStart(2, '0')}`}
-    />
-    <PublicationList items={conferences} lang={lang} />
-  </div>
-</section>
+        <ol class="log">
+          {g.items.map((p, i) => (
+            <li class={i > 0 && g.items[i - 1]!.year === p.year ? 'same' : ''}>
+              <span class="year">{p.year}</span>
+
+              <div class="entry">
+                <p class="pTitle">{p.title}</p>
+
+                {p.authors.length > 0 ? (
+                  <p class="authors">
+                    {p.authors.map((a) => (
+                      <span class={LAB_AUTHORS.includes(a) ? 'lab' : undefined}>{a}</span>
+                    ))}
+                  </p>
+                ) : null}
+
+                <p class="venue">{citation(p)}</p>
+              </div>
+
+              <span class="seq" aria-hidden="true">
+                {nn(g.items.length - i)}
+              </span>
+            </li>
+          ))}
+        </ol>
+      </section>
+    ))
+  }
+</div>
 
 <style>
-  .section { display: grid; gap: var(--space-7); padding-block: var(--space-7) var(--section-y); }
-  .stack { display: grid; gap: var(--space-3); }
+  /*
+   * 기둥은 왼쪽에 붙는다(홈과 같은 축). 제목 한 줄이 75자를 넘지 않게 본문 칸을
+   * 48rem 으로 묶는다 — 전체 폭으로 흘리면 최장 제목이 110자를 넘어 눈이 다음 줄
+   * 머리를 못 찾는다.
+   */
+  .page {
+    display: grid;
+    inline-size: min(100%, 68rem);
+    padding-inline: var(--gutter);
+    padding-block-end: var(--space-8);
+  }
+
+  /* ---- 머리 ----------------------------------------------------------- */
+  .lead {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-4);
+    padding-block: var(--space-9) var(--space-8);
+  }
+  .title {
+    margin: 0;
+    font-family: var(--font-sans);
+    font-size: clamp(2.6rem, 1.4rem + 4.6vw, 5.5rem);
+    font-weight: var(--w-thin);
+    line-height: 0.92;
+    letter-spacing: -0.045em;
+    color: var(--fg);
+  }
+  .tally {
+    margin: 0;
+    font-family: var(--font-mono);
+    font-size: var(--t-h4);
+    line-height: 1;
+    letter-spacing: var(--track-mono);
+    color: var(--fg-dim);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ---- 종류 스트립 ----------------------------------------------------- */
+  .group {
+    display: grid;
+    gap: var(--space-3);
+    padding-block-end: var(--space-8);
+  }
+  .strip {
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.7em;
+    font-family: var(--font-mono);
+    font-size: var(--t-micro);
+    font-weight: var(--w-mono);
+    line-height: var(--lh-mono);
+    letter-spacing: var(--track-label);
+    text-transform: uppercase;
+    color: var(--fg-mute);
+    font-variant-numeric: tabular-nums;
+  }
+  .rule {
+    flex: 1 1 auto;
+    min-inline-size: 2rem;
+    block-size: 0;
+    border-block-start: var(--hair) dotted var(--scan);
+  }
+  .stripNo {
+    color: var(--fg-dim);
+  }
+  /*
+   * 모노 계측 라벨 안의 한글. 모노 글꼴에는 한글이 없어 본문 글꼴로 떨어지는데,
+   * 라틴 대문자용으로 잡은 넓은 트래킹(0.18em)이 그대로 걸리면 글자가 흩어진다
+   * (`국제 저널 논문` 이 `국 제  저 널  논 문` 으로 읽혔다). global.css 의
+   * `.mono:lang(ko)` 와 같은 값으로 되돌린다.
+   */
+  .strip:lang(ko) {
+    letter-spacing: 0.04em;
+  }
+
+  /* ---- 로그 행 --------------------------------------------------------- */
+  .log {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+  }
+  .log li {
+    display: grid;
+    /* 연도 칸은 rem 으로 — `5ch` 는 상속받은 본문 크기를 따라 흔들린다. */
+    grid-template-columns: 4rem minmax(0, 48rem) 2.5rem;
+    gap: var(--space-3);
+    padding-block: var(--space-3);
+  }
+  .log li + li {
+    border-block-start: var(--hair) dotted var(--scan);
+  }
+  .year {
+    font-family: var(--font-mono);
+    font-size: var(--t-mono-sm);
+    line-height: var(--lh-2);
+    letter-spacing: var(--track-mono);
+    color: var(--fg-mute);
+    font-variant-numeric: tabular-nums;
+  }
+  /* 같은 연도가 이어지면 자리만 비운다 — 열이 어긋나지 않게 지우지는 않는다. */
+  .log li.same .year {
+    visibility: hidden;
+  }
+
+  .entry {
+    display: grid;
+    gap: var(--space-05);
+    min-inline-size: 0;
+  }
+  .pTitle {
+    margin: 0;
+    font-size: var(--t-base);
+    line-height: var(--lh-2);
+    letter-spacing: -0.008em;
+    color: var(--fg);
+    text-wrap: pretty;
+  }
+  .authors {
+    margin: 0;
+    font-size: var(--t-sm);
+    line-height: var(--lh-body);
+    color: var(--fg-mute);
+  }
+  /* 연구실 저자만 본문 광도로 — 목록에서 눈으로 바로 찾게 한다. */
+  .lab {
+    color: var(--fg);
+  }
+  /*
+   * 쉼표는 **앞 저자에 붙는다.** 다음 저자 앞에 붙이면(`span + span::before`)
+   * 줄이 바뀔 때 쉼표가 다음 줄 맨 앞에 떨어진다.
+   */
+  .authors span:not(:last-child)::after {
+    content: ', ';
+    color: var(--fg-dim);
+  }
+  /* 게재처는 홈의 레일과 같은 캡션 광도로 — `--fg-dim` 은 도로 위에서 읽히지 않는다. */
+  .venue {
+    margin: 0;
+    font-family: var(--font-mono);
+    font-size: var(--t-micro);
+    line-height: var(--lh-mono);
+    letter-spacing: var(--track-mono);
+    color: var(--fg-mute);
+    text-wrap: pretty;
+  }
+
+  /* 내림차순 일련번호 — 목록의 길이와 지금 어디쯤인지가 함께 읽힌다. */
+  .seq {
+    justify-self: end;
+    align-self: start;
+    font-family: var(--font-mono);
+    font-size: var(--t-micro);
+    line-height: var(--lh-2);
+    letter-spacing: var(--track-mono);
+    color: var(--line-hot);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ---- 좁은 화면 ------------------------------------------------------ */
+  @media (max-width: 62rem) {
+    .lead {
+      padding-block: var(--space-8) var(--space-6);
+    }
+    .group {
+      padding-block-end: var(--space-7);
+    }
+    /*
+     * 연도 칸과 일련번호 칸이 390px 에서 가로의 3분의 1을 먹어 제목이 한 줄에
+     * 30자밖에 못 들어갔다. 레일을 세로로 접고 일련번호는 지운다 — 번호는
+     * 여유가 있을 때 읽는 계측이지 내용이 아니다.
+     */
+    .log li {
+      grid-template-columns: minmax(0, 1fr);
+      gap: var(--space-1);
+      padding-block: var(--space-2);
+    }
+    .log li.same .year {
+      display: none;
+    }
+    .seq {
+      display: none;
+    }
+  }
 </style>

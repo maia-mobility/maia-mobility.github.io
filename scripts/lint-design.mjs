@@ -59,8 +59,9 @@ const RULES = [
     label: '규칙5 · 그라디언트·블러 금지',
     re: /(linear-gradient|radial-gradient|conic-gradient|filter\s*:\s*blur|backdrop-filter)/g,
     /*
-     * 명시적 예외는 **하나뿐**이고 표식으로 선언한다 (AGENTS.md 하드 룰 5).
-     *   allow-fade — 캔버스 하단의 수직 페이드 (PointCloudHero.module.css `.scrim`)
+     * 명시적 예외는 표식(`allow-fade`)으로 선언한다 (AGENTS.md 하드 룰 5).
+     * **지금 이 표식을 쓰는 곳은 없다** — 캔버스 하단의 수직 페이드는
+     * `PointCloudHero` 에 있었고, 그 컴포넌트는 새 틀로 옮기며 사라졌다.
      *
      * 한때 `allow-plate` 로 본문 뒤 `backdrop-filter` 판을 허용한 적이 있다.
      * 대비는 벌었지만 결과가 프로스티드 글래스 카드라 되돌렸다 — 캔버스 위

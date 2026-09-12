@@ -82,34 +82,35 @@ say(allViolations.length === 0, `CSP 위반·JS 오류 없음 (${PAGES.length}�
 for (const v of allViolations) console.log(`      ${v}`);
 
 /* 인라인 style 속성이 **실제로 먹는지** 값으로 확인한다.
-   CSP 위반 이벤트가 안 잡히는 경우가 있어, 결과를 직접 본다. */
+
+   CSP 위반 이벤트는 이 경우 아무것도 남기지 않는다 — `style-src` 에 해시가 있으면
+   규격상 `'unsafe-inline'` 이 무시되고, 인라인 `style=""` **속성**은 해시를 붙일
+   자리가 없어 통째로 막히는데 **콘솔에 한 줄도 안 찍힌다.** 한 번 그렇게 배포했고,
+   사람이 화면을 보고 잡았다. 그래서 이벤트가 아니라 **결과 값**을 직접 본다.
+
+   지금 남아 있는 인라인 속성은 초상 사진의 종횡비 하나다(`DotPortrait`).
+   예전에는 연구 덱의 위치 눈금(`--k`)도 여기서 쟀는데, 덱이 세로 무대로
+   바뀌면서 사라졌다. */
 const page = await browser.newPage();
 await page.setViewport({ width: 1280, height: 900 });
 await page.goto(BASE + '/', { waitUntil: 'networkidle0' });
-await new Promise((r) => setTimeout(r, 2500));
-const top = await page.evaluate(
-  () => document.querySelector('[data-deck-room]').getBoundingClientRect().top + window.scrollY,
-);
-await page.evaluate((y) => window.scrollTo(0, y), Math.round(top + 60));
-await new Promise((r) => setTimeout(r, 1500));
+await new Promise((r) => setTimeout(r, 2000));
 
-const deck = await page.evaluate(() => {
-  const ticks = [...document.querySelectorAll('.ticks a')];
+const ratio = await page.evaluate(() => {
+  const el = document.querySelector('[data-dot-wrap]');
+  if (!el) return null;
   return {
-    k: ticks.map((a) => getComputedStyle(a).getPropertyValue('--k').trim()),
-    /* `matrix(a, b, c, d, tx, ty)` 의 a 가 scaleX 다. **문자열로 비교하지 마라** —
-       `matrix(0.999, …)` 가 `'matrix(0'` 으로 시작해서, 거의 다 채워진 칸을
-       비었다고 읽는다(실제로 그렇게 잘못 읽었다). 숫자로 꺼내 쓴다. */
-    scaleX: ticks.map((a) => {
-      const m = getComputedStyle(a, '::after').transform.match(/matrix\(([-\d.]+)/);
-      return m ? Number(m[1]) : 1;
-    }),
+    attr: el.getAttribute('style') ?? '',
+    computed: getComputedStyle(el).aspectRatio,
+    w: Math.round(el.getBoundingClientRect().width),
+    h: Math.round(el.getBoundingClientRect().height),
   };
 });
-const filled = deck.scaleX.filter((v) => v > 0.5).length;
 say(
-  deck.k.every((v) => v !== '') && filled === 1,
-  `위치 눈금이 현재 칸만 가리킨다 (채워짐 [${deck.scaleX.map((v) => v.toFixed(2)).join(' ')}] · --k=[${deck.k.join(', ')}])`,
+  ratio !== null && /aspect-ratio/.test(ratio.attr) && Math.abs(ratio.w / ratio.h - 3 / 4) < 0.02,
+  ratio
+    ? `인라인 style 속성이 실제로 먹는다 (초상 ${ratio.w}×${ratio.h} = ${(ratio.w / ratio.h).toFixed(3)}, 기대 0.750)`
+    : '인라인 style 속성이 실제로 먹는다 (초상을 못 찾음)',
 );
 
 const portrait = await page.evaluate(async () => {

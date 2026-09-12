@@ -1,0 +1,9 @@
+/* 도로는 뷰포트에 고정된 페이지 전체의 배경이다.
+   z-index 음수 → 본문·크롬이 전부 이 위에 얹힌다. */
+.canvas {
+  position: fixed;
+  inset: 0;
+  inline-size: 100%;
+  block-size: 100%;
+  z-index: -1;
+}

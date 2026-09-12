@@ -1,10 +1,11 @@
 ---
+/* 홈 (한글). 구조는 영문과 같고 `lang` 만 다르다. */
 import Page from '../../layouts/Page.astro';
-import PointCloudHero from '../../components/PointCloudHero.tsx';
+import RoadCanvas from '../../components/RoadCanvas';
 import HomeBody from '../../sections/HomeBody.astro';
 ---
 
-<Page lang="ko" page="" transparentHeader={true}>
-  <PointCloudHero client:load lang="ko" />
+<Page lang="ko" page="" ownsCanvas={true}>
+  <RoadCanvas client:load />
   <HomeBody lang="ko" />
 </Page>

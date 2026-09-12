@@ -19,7 +19,7 @@ await page.goto(`${BASE}/research`, { waitUntil: 'networkidle0' });
 /** HUD 숫자를 전부 긁어온다. */
 const readHud = (areaId) =>
   page.evaluate((id) => {
-    const root = document.getElementById(id);
+    const root = document.getElementById(`area-${id}`);
     if (!root) return null;
     const out = {};
     for (const dl of root.querySelectorAll(
@@ -45,7 +45,7 @@ const readHud = (areaId) =>
 const clickToggle = (areaId, label) =>
   page.evaluate(
     (id, lab) => {
-      const root = document.getElementById(id);
+      const root = document.getElementById(`area-${id}`);
       const btns = [...(root?.querySelectorAll('button') ?? [])];
       const b = btns.find((x) => x.textContent?.replace(/\s+/g, ' ').includes(lab));
       if (!b) return false;
@@ -69,7 +69,7 @@ const waitSettled = async (areaId, maxMs = 110000) => {
   const t0 = Date.now();
   while (Date.now() - t0 < maxMs) {
     const ok = await page.evaluate((id) => {
-      const p = document.getElementById(id)?.querySelector('[class*=readings] p');
+      const p = document.getElementById(`area-${id}`)?.querySelector('[class*=readings] p');
       return (p?.dataset.state ?? '') === 'settled';
     }, areaId);
     if (ok) return ((Date.now() - t0) / 1000).toFixed(0);
@@ -80,7 +80,7 @@ const waitSettled = async (areaId, maxMs = 110000) => {
 
 // 모든 시뮬이 화면에 들어와 client:visible 이 붙도록 한 번 훑는다
 await page.evaluate(async () => {
-  for (const el of document.querySelectorAll('article[id]')) {
+  for (const el of document.querySelectorAll('article[id^="area-"]')) {
     el.scrollIntoView({ block: 'center' });
     await new Promise((r) => setTimeout(r, 350));
   }
@@ -89,7 +89,7 @@ await page.evaluate(async () => {
 await settle(1500);
 
 console.log('── 01 platoon · 모드별 증폭률 (사람 > 상용ACC > 제어AV 여야 한다) ──');
-await page.evaluate(() => document.getElementById('av-control')?.scrollIntoView({ block: 'center' }));
+await page.evaluate(() => document.getElementById('area-av-control')?.scrollIntoView({ block: 'center' }));
 for (const mode of ['HUMAN', 'COMMERCIAL ACC', 'CONTROLLED AV']) {
   const ok = await clickToggle('av-control', mode);
   const w = await waitSettled('av-control');
@@ -98,7 +98,7 @@ for (const mode of ['HUMAN', 'COMMERCIAL ACC', 'CONTROLLED AV']) {
 }
 
 console.log('\n── 02 shockwave · AV 대수별 속도변동 (단조 감소여야 한다) ──');
-await page.evaluate(() => document.getElementById('mixed-traffic')?.scrollIntoView({ block: 'center' }));
+await page.evaluate(() => document.getElementById('area-mixed-traffic')?.scrollIntoView({ block: 'center' }));
 for (const av of ['AV 0', 'AV 1', 'AV 2', 'AV 3']) {
   const ok = await clickToggle('mixed-traffic', av);
   const w = await waitSettled('mixed-traffic');
@@ -110,7 +110,7 @@ console.log('\n── 03·04 · 캔버스가 비어있지 않은지 + 누적 카
 // 03 의 첫 운행 완료는 배속 2.2 기준 약 12초, 04 의 첫 합류는 약 10초 걸린다.
 // 9초만 기다리면 늘 0 이 나와 검사가 무의미해진다.
 for (const id of ['mobility-service', 'cav-cda']) {
-  await page.evaluate((i) => document.getElementById(i)?.scrollIntoView({ block: 'center' }), id);
+  await page.evaluate((i) => document.getElementById(`area-${i}`)?.scrollIntoView({ block: 'center' }), id);
   await settle(18000);
   const r = await readHud(id);
   console.log(`  ${id.padEnd(18)} 밝은픽셀 ${r?.litPct ?? '?'}%  ${r?.text ?? ''}`);

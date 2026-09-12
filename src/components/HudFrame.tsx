@@ -66,8 +66,21 @@ export default function HudFrame({
     .filter(Boolean)
     .join(' ');
 
+  /*
+   * `data-quiet` — 배경 도로에게 주는 표식이다(CSS 는 이 속성을 읽지 않는다).
+   *
+   * 고정 배경으로 점군 도로가 깔린 페이지에서, HudFrame 은 그 위에 **면을 세운다.**
+   * 표식이 없으면 도로가 프레임 변까지 그대로 달려와 뚝 끊긴다 — 재질이 바뀐 것이
+   * 아니라 **잘린 면**으로 보인다(교수님이 "경계가 어색하다"고 한 자리가 여기다).
+   * 표식을 달면 `usePointCloud` 가 프레임에 다가갈수록 점을 성기게 만들어, 도로가
+   * 계측기에 **흡수되면서** 끝난다. 도로가 없는 페이지에서는 아무 일도 없다.
+   *
+   * 값이 `panel` 인 것은 본문(값 없는 `data-quiet`)보다 **더 깊이** 잠그라는 뜻이다 —
+   * 글은 도로 위에 얹히지만 계측기는 다른 장비의 화면이라 그 안에 도로가 비치면
+   * 수치 위로 점이 지나간다.
+   */
   return (
-    <Tag className={classes} {...rest}>
+    <Tag className={classes} data-quiet="panel" {...rest}>
       {label ? <span className={s.label}>{label}</span> : null}
       {children}
       {corners.map((c) => (

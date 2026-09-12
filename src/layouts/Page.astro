@@ -1,6 +1,20 @@
 ---
+/*
+ * 모든 페이지의 껍데기.
+ *
+ * **배경 도로가 여섯 페이지 전부에 깔린다.** 예전에는 홈에만 있었고, 나머지
+ * 다섯 페이지는 그냥 어두운 배경 위의 문서였다 — 이 사이트의 전제가 배경인데
+ * 그 전제가 여섯 중 다섯에서 사라져 있었던 셈이다. 도로는 문서 흐름 밖의
+ * `position: fixed` 배경이라 본문 레이아웃에 관여하지 않는다.
+ *
+ * 홈은 예외다 — 홈의 첫 화면은 `index.astro` 가 직접 캔버스를 깔고 그 위에
+ * 이름을 세운다(같은 캔버스를 두 번 깔지 않는다).
+ *
+ * 머리말 띠(옛 `Nav`)는 없앴다. 그 자리를 `CornerIndex` 한 줄이 대신한다.
+ */
 import Base from './Base.astro';
-import Nav from '../components/Nav';
+import CornerIndex from '../components/CornerIndex.astro';
+import RoadCanvas from '../components/RoadCanvas';
 import Footer from '../components/Footer';
 import ScrollReveal from '../components/ScrollReveal.astro';
 import type { Lang } from '../i18n';
@@ -8,57 +22,20 @@ import type { Lang } from '../i18n';
 interface Props {
   lang: Lang;
   page: string;
-  transparentHeader?: boolean;
+  /** 홈처럼 페이지가 스스로 캔버스를 까는 경우 true — 여기서는 깔지 않는다. */
+  ownsCanvas?: boolean;
 }
 
-const { lang, page, transparentHeader = false } = Astro.props;
+const { lang, page, ownsCanvas = false } = Astro.props;
 const pathname = Astro.url.pathname;
 ---
 
-<Base lang={lang} page={page} transparentHeader={transparentHeader}>
-  {/* Nav·Footer 모두 정적이다 — client: 지시어를 붙이지 마라 (React 런타임 213KB) */}
-  <Nav slot="header" lang={lang} pathname={pathname} />
+<Base lang={lang} page={page}>
+  {/* 내비바가 아니라 한 줄. 정적이라 JS 가 꺼져도 전부 동작한다. */}
+  <CornerIndex slot="header" lang={lang} pathname={pathname} />
+  {ownsCanvas ? null : <RoadCanvas client:load />}
   <slot />
   <Footer slot="footer" lang={lang} />
 </Base>
 
 <ScrollReveal />
-
-{/*
-  모바일 메뉴 토글. React 없이 처리한다.
-  JS 가 꺼져 있으면 메뉴가 열리지 않지만, 푸터에 동일한 내비게이션이 있어 모든 페이지에 도달할 수 있다.
-*/}
-<script>
-  const btn = document.querySelector<HTMLButtonElement>('[data-nav-toggle]');
-  const panel = document.querySelector<HTMLElement>('[data-nav-panel]');
-  const glyph = document.querySelector<HTMLElement>('[data-nav-glyph]');
-  const label = document.querySelector<HTMLElement>('[data-nav-label]');
-
-  if (btn && panel) {
-    const setOpen = (open: boolean) => {
-      panel.hidden = !open;
-      btn.setAttribute('aria-expanded', String(open));
-      document.body.style.overflow = open ? 'hidden' : '';
-      if (glyph) glyph.textContent = open ? '✕' : '▤';
-      if (label) {
-        label.textContent = open
-          ? (btn.dataset.labelClose ?? 'Close')
-          : (btn.dataset.labelOpen ?? 'Menu');
-      }
-    };
-
-    btn.addEventListener('click', () => setOpen(panel.hidden));
-
-    document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && !panel.hidden) {
-        setOpen(false);
-        btn.focus();
-      }
-    });
-
-    // 링크를 누르면 이동 전에 닫는다 (같은 페이지 앵커일 때 패널이 남지 않도록)
-    panel.addEventListener('click', (e) => {
-      if ((e.target as HTMLElement).closest('a')) setOpen(false);
-    });
-  }
-</script>

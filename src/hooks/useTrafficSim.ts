@@ -260,16 +260,13 @@ interface Scene {
     settledAt: number;
   };
   dispatch?: {
-    /** 루프 위 수요 노드의 고정 위치(m) */
-    nodes: number[];
+    net: Net;
+    /** 차량 id 로 색인하는 도로망 위 상태 */
+    nav: Nav[];
     jobs: Job[];
     next: number;
     served: number;
     waitSum: number;
-    /** 차량 id 별 운행 여부 */
-    busy: Uint8Array;
-    /** 차량 id 별 정차 종료 시각 */
-    dwell: Float64Array;
   };
   v2v?: { ramp: Vehicle[]; nextSpawn: number; merges: number; links: number; nextId: number };
 }
@@ -433,31 +430,197 @@ function buildRing(avCount: number): Scene {
   return sc;
 }
 
-/* --- 03 dispatch --------------------------------------------------- */
-
-/** 배차 루프 — 둘레가 DISPATCH.length(520m) 인 직사각 회로. 2*(215+45)=520. */
-const LOOP_W = 222;
-const LOOP_H = 38;
-/**
- * 수요 노드를 회로 바깥으로 밀어내는 거리(m). 축척에도 이 여백을 포함시킨다.
+/* --- 03 dispatch ---------------------------------------------------
  *
- * 치수(222×38)는 캔버스가 가로로 길다는 점에 맞췄다. 이전 215×45 + NODE_OUT 14 는
- * 세로가 축척을 잡아먹어 가로로 700px 가 비었다. 둘레는 2*(222+38)=520m 로 동일하다.
+ * 도심 도로망 위의 수요응답형 운행.
+ *
+ * 앞 판은 직사각 회로 하나였다. 차가 한 줄로 돌기만 해서 "배차"가 아니라
+ * **순환버스**로 읽혔고, 캔버스에서는 긴 가로줄 두 개로 보였다. 더 큰 문제는
+ * 배차의 본질 — **길이 갈라지는 곳에서 어디로 갈지 고르는 것** — 이 회로에는
+ * 아예 존재하지 않았다는 점이다. 노선이 하나면 고를 것이 없다.
+ *
+ * 지금은 교차로 12곳짜리 도로망이다. 수요가 교차로에 뜨면 **도로를 따라 가장
+ * 가까운** 유휴 차량이 최단경로(다익스트라)로 향하고, 태운 뒤 목적지로 간다.
+ * 차량은 간선 위에서 IDM 으로 앞차를 따르고, 교차로는 한 번에 한 대만 지난다.
  */
-const NODE_OUT = 9;
+
+/** 교차로 점유 반경(m). 이 안에 차가 있으면 뒤따라오는 차는 정지선에 선다. */
+const NODE_HOLD = 8;
+/** 교차로 통과를 판단하기 시작하는 거리(m). */
+const NODE_GUARD = 22;
+/** 회전 통과 속도(m/s). 직각으로 꺾는데 43km/h 로 지나가면 궤적이 아니라 순간이동이다. */
+const TURN_V = 7;
+/** 이 각(rad)보다 크게 꺾이면 회전으로 본다. 격자 흔들림(≈0.3)과 직각(≈1.57) 사이. */
+const TURN_BEND = 0.9;
+
+interface NetNode {
+  x: number;
+  y: number;
+}
+
+interface Net {
+  nodes: NetNode[];
+  /** 노드별 인접 노드 */
+  adj: number[][];
+  /** 간선 목록(a < b) — 그리기용 */
+  edges: [number, number][];
+  /** 노드 간 최단거리(m) — n×n 평탄 배열 */
+  dist: Float64Array;
+  /** 최단경로의 첫 홉 — n×n 평탄 배열. -1 = 도달 불가 */
+  hop: Int8Array;
+  /** 도면 크기(m) */
+  w: number;
+  h: number;
+}
+
+/** 차량 한 대의 도로망 위 상태. 차량 id 로 색인한다. */
+interface Nav {
+  /** 현재 간선 a → b */
+  a: number;
+  b: number;
+  /** a 로부터 진행한 거리(m) */
+  s: number;
+  /** b 다음에 지날 노드들 */
+  route: number[];
+  /** 배정된 수요 색인(-1 = 유휴) */
+  job: number;
+  /** 정차 종료 시각(s) */
+  dwell: number;
+}
+
+function buildNet(rng: () => number): Net {
+  const { cols, rows, spanX, spanY, jitter, cut } = DISPATCH;
+  const n = cols * rows;
+  const nodes: NetNode[] = [];
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      nodes.push({
+        x: (c - (cols - 1) / 2) * spanX + (rng() - 0.5) * 2 * jitter,
+        y: (r - (rows - 1) / 2) * spanY + (rng() - 0.5) * 2 * jitter,
+      });
+    }
+  }
+
+  const dropped = new Set(cut.map(([a, b]) => `${a}-${b}`));
+  const edges: [number, number][] = [];
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const i = r * cols + c;
+      if (c + 1 < cols && !dropped.has(`${i}-${i + 1}`)) edges.push([i, i + 1]);
+      if (r + 1 < rows && !dropped.has(`${i}-${i + cols}`)) edges.push([i, i + cols]);
+    }
+  }
+
+  const adj: number[][] = Array.from({ length: n }, () => []);
+  for (const [a, b] of edges) {
+    adj[a]!.push(b);
+    adj[b]!.push(a);
+  }
+
+  const len = (a: number, b: number) => Math.hypot(nodes[a]!.x - nodes[b]!.x, nodes[a]!.y - nodes[b]!.y);
+
+  /* 전 쌍 최단경로. 노드가 12개뿐이라 출발지마다 O(n²) 다익스트라로 충분하고,
+     빌드 때 한 번만 돌므로 프레임에는 아무 비용도 없다. */
+  const dist = new Float64Array(n * n).fill(Infinity);
+  const hop = new Int8Array(n * n).fill(-1);
+  for (let s = 0; s < n; s++) {
+    const d = new Float64Array(n).fill(Infinity);
+    const prev = new Int8Array(n).fill(-1);
+    const done = new Uint8Array(n);
+    d[s] = 0;
+    for (;;) {
+      let u = -1;
+      let best = Infinity;
+      for (let i = 0; i < n; i++) {
+        if (!done[i] && d[i]! < best) {
+          best = d[i]!;
+          u = i;
+        }
+      }
+      if (u < 0) break;
+      done[u] = 1;
+      for (const v of adj[u]!) {
+        const nd = d[u]! + len(u, v);
+        if (nd < d[v]!) {
+          d[v] = nd;
+          prev[v] = u;
+        }
+      }
+    }
+    for (let t = 0; t < n; t++) {
+      dist[s * n + t] = d[t]!;
+      if (t === s) {
+        hop[s * n + t] = s;
+        continue;
+      }
+      // t 에서 prev 를 거슬러 s 바로 다음 노드를 찾는다.
+      let cur = t;
+      let first = -1;
+      let guard = 0;
+      while (cur !== s && cur >= 0 && guard++ < n + 1) {
+        first = cur;
+        cur = prev[cur]!;
+      }
+      hop[s * n + t] = cur === s ? first : -1;
+    }
+  }
+
+  let w = 0;
+  let h = 0;
+  for (const p of nodes) {
+    w = Math.max(w, Math.abs(p.x) * 2);
+    h = Math.max(h, Math.abs(p.y) * 2);
+  }
+  return { nodes, adj, edges, dist, hop, w, h };
+}
+
+const edgeLen = (net: Net, a: number, b: number): number =>
+  Math.hypot(net.nodes[a]!.x - net.nodes[b]!.x, net.nodes[a]!.y - net.nodes[b]!.y);
+
+/** from 에서 to 까지의 노드 열(from 은 빼고). 도달 불가면 빈 배열. */
+function routeTo(net: Net, from: number, to: number): number[] {
+  const n = net.nodes.length;
+  const out: number[] = [];
+  let cur = from;
+  let guard = 0;
+  while (cur !== to && guard++ < n + 1) {
+    const nx = net.hop[cur * n + to]!;
+    if (nx < 0) return [];
+    out.push(nx);
+    cur = nx;
+  }
+  return out;
+}
+
+/** 차량의 현재 좌표와 진행 방향. 그리기와 배차 링크가 같이 쓴다. */
+function navPoint(net: Net, nv: Nav): { x: number; y: number; ang: number } {
+  const A = net.nodes[nv.a]!;
+  const B = net.nodes[nv.b]!;
+  const L = Math.max(1e-3, Math.hypot(B.x - A.x, B.y - A.y));
+  const k = Math.min(1, Math.max(0, nv.s / L));
+  return { x: A.x + (B.x - A.x) * k, y: A.y + (B.y - A.y) * k, ang: Math.atan2(B.y - A.y, B.x - A.x) };
+}
 
 function buildDispatch(): Scene {
   const rng = makeRng(DISPATCH.seed);
-  const C = 2 * (LOOP_W + LOOP_H);
-  const vehicles = seedRing(
-    DISPATCH.count,
-    C,
-    () => ({ kind: 'av', params: DISPATCH.params }),
-    DISPATCH.v0,
-    rng,
-  );
-  const nodes = Array.from({ length: DISPATCH.nodes }, (_, j) => ((j + 0.35) * C) / DISPATCH.nodes);
-  return {
+  const net = buildNet(rng);
+  const vehicles: Vehicle[] = [];
+  const nav: Nav[] = [];
+  for (let i = 0; i < DISPATCH.count; i++) {
+    // 서로 다른 간선에 흩어 놓는다 — 한 간선에 몰리면 첫 화면이 정체로 시작한다.
+    const [a, b] = net.edges[(i * 5 + 1) % net.edges.length]!;
+    const flip = i % 2 === 0;
+    vehicles.push(makeVehicle(i, 0, DISPATCH.v0, 'av', DISPATCH.params));
+    nav.push({
+      a: flip ? a : b,
+      b: flip ? b : a,
+      s: edgeLen(net, a, b) * (0.2 + rng() * 0.6),
+      route: [],
+      job: -1,
+      dwell: 0,
+    });
+  }
+  const sc: Scene = {
     scenario: 'dispatch',
     vehicles,
     rng,
@@ -465,98 +628,220 @@ function buildDispatch(): Scene {
     accum: 0,
     spreadEma: 0,
     spreadSlow: 0,
-    circumference: C,
-    dispatch: {
-      nodes,
-      jobs: [],
-      next: 1,
-      served: 0,
-      waitSum: 0,
-      busy: new Uint8Array(DISPATCH.count),
-      dwell: new Float64Array(DISPATCH.count),
-    },
+    dispatch: { net, nav, jobs: [], next: 1, served: 0, waitSum: 0 },
   };
+
+  /* **정상운행 상태에서 시작한다.**
+     빈 도로에 차 여섯 대를 흩어 놓고 시작하면, 첫 운행이 끝나기까지 20초가 걸린다
+     (실측). 그 사이 방문자가 보는 것은 `TRIPS SERVED 0` 뿐이라 "배차가 안 되는
+     시스템"으로 읽힌다. 45초를 미리 돌려 놓으면 화면에 들어선 순간이 곧 운행 중인
+     한복판이다. 수치는 그대로 실측이다 — 과도구간을 건너뛴 것이지 지어낸 게 아니다. */
+  for (let i = 0; i < 45 * 60; i++) stepDispatch(sc, 1 / 60);
+  return sc;
 }
 
-/** 링 위에서 a → b 까지 진행 방향 거리. */
-function ahead(a: number, b: number, C: number): number {
-  let d = b - a;
-  if (d < 0) d += C;
-  return d;
+/** 유휴 차량이 다음에 들어설 간선. 왔던 길로 바로 되돌아가지 않는다. */
+function wander(net: Net, nv: Nav, rng: () => number): number {
+  const opts = net.adj[nv.b]!.filter((x) => x !== nv.a);
+  const pool = opts.length ? opts : net.adj[nv.b]!;
+  return pool[Math.min(pool.length - 1, Math.floor(rng() * pool.length))]!;
 }
 
 function stepDispatch(sc: Scene, dt: number): void {
   const st = sc.dispatch!;
-  const C = sc.circumference!;
+  const net = st.net;
+  const n = net.nodes.length;
   const vs = sc.vehicles;
-  const used = new Set<number>();
-  for (const j of st.jobs) {
-    used.add(j.origin);
-    used.add(j.dest);
-  }
+  const nav = st.nav;
 
-  // 새 수요 — 비어 있는 노드에서 발생하고, 목적지는 다른 빈 노드로 잡는다.
-  if (sc.t >= st.next && st.jobs.length < DISPATCH.nodes - 1) {
-    const free = st.nodes.map((_, i) => i).filter((i) => !used.has(i));
+  /* --- 새 수요 ------------------------------------------------------
+     이미 수요가 걸린 교차로는 피한다 — 같은 자리에 마커가 겹치면 둘 다 안 읽힌다. */
+  if (sc.t >= st.next && st.jobs.length < DISPATCH.maxJobs) {
+    const taken = new Set<number>();
+    for (const j of st.jobs) {
+      taken.add(j.origin);
+      taken.add(j.dest);
+    }
+    const free = Array.from({ length: n }, (_, i) => i).filter((i) => !taken.has(i));
     if (free.length >= 2) {
-      const oi = Math.min(free.length - 1, Math.floor(sc.rng() * free.length));
-      const origin = free.splice(oi, 1)[0]!;
-      const dest = free[Math.min(free.length - 1, Math.floor(sc.rng() * free.length))]!;
+      const origin = free.splice(Math.floor(sc.rng() * free.length), 1)[0]!;
+      // 한 블록짜리 운행은 화면에서 배차로 안 보인다 — 충분히 먼 목적지를 고른다.
+      const fit = free.filter((i) => {
+        const d = net.dist[origin * n + i]!;
+        return d >= DISPATCH.minTrip && d <= DISPATCH.maxTrip;
+      });
+      const pool = fit.length ? fit : free;
+      const dest = pool[Math.min(pool.length - 1, Math.floor(sc.rng() * pool.length))]!;
       st.jobs.push({ origin, dest, veh: -1, born: sc.t, phase: 0 });
     }
     st.next = sc.t + DISPATCH.demandInterval * (0.7 + sc.rng() * 0.7);
   }
 
-  // 배차 — 출발 노드까지 진행 방향 거리가 가장 짧은 유휴 차량
-  for (const job of st.jobs) {
+  /* --- 배차 --------------------------------------------------------
+     **도로를 따라** 가장 가까운 유휴 차량. 직선거리로 고르면 강 건너 차가 뽑힌다. */
+  for (let ji = 0; ji < st.jobs.length; ji++) {
+    const job = st.jobs[ji]!;
     if (job.phase !== 0) continue;
     let best = -1;
     let bestD = Infinity;
     for (const v of vs) {
-      if (st.busy[v.id]) continue;
-      const d = ahead(v.x, st.nodes[job.origin]!, C);
+      const nv = nav[v.id]!;
+      if (nv.job >= 0) continue;
+      // 이미 b 를 향해 달리고 있으므로 b 부터 잰다 — 중간에 되돌 수는 없다.
+      const d = net.dist[nv.b * n + job.origin]!;
       if (d < bestD) {
         bestD = d;
         best = v.id;
       }
     }
-    if (best >= 0) {
-      job.veh = best;
-      job.phase = 1;
-      st.busy[best] = 1;
-    }
+    if (best < 0) continue;
+    const nv = nav[best]!;
+    nv.job = ji;
+    nv.route = routeTo(net, nv.b, job.origin);
+    job.veh = best;
+    job.phase = 1;
   }
 
-  // 도착 판정 — 목표 노드를 막 지나쳤으면 정차한다.
-  const byId = new Map<number, Vehicle>();
-  for (const v of vs) byId.set(v.id, v);
-  for (let i = st.jobs.length - 1; i >= 0; i--) {
-    const job = st.jobs[i]!;
-    if (job.phase === 0) continue;
-    const v = byId.get(job.veh);
-    if (!v || sc.t < st.dwell[v.id]!) continue;
-    const target = st.nodes[job.phase === 1 ? job.origin : job.dest]!;
-    if (ahead(v.x, target, C) < C - 7) continue;
-    st.dwell[v.id] = sc.t + 1.2;
-    if (job.phase === 1) {
-      job.phase = 2;
-      st.waitSum += sc.t - job.born;
-    } else {
-      st.served++;
-      st.busy[v.id] = 0;
-      st.jobs.splice(i, 1);
-    }
+  /* --- 교차로 점유 --------------------------------------------------
+     교차로 안(NODE_HOLD)에 있는 차량을 미리 세어 둔다. 프레임당 한 번이다. */
+  const holder = new Int8Array(n).fill(-1);
+  for (const v of vs) {
+    const nv = nav[v.id]!;
+    const L = edgeLen(net, nv.a, nv.b);
+    if (L - nv.s < NODE_HOLD) holder[nv.b] = v.id;
+    else if (nv.s < NODE_HOLD) holder[nv.a] = v.id;
   }
 
-  step(vs, dt, {
-    circumference: C,
-    rng: sc.rng,
-    // 승하차 정차 — 물리는 그대로 두고 가속도만 눌러 세운다. 뒤차는 IDM 이 알아서 선다.
-    override: (v) => (sc.t < st.dwell[v.id]! ? (v.v > 0.2 ? -v.params.b : 0) : undefined),
-  });
+  /* --- 주행 --------------------------------------------------------- */
+  for (const v of vs) {
+    const nv = nav[v.id]!;
+    let L = edgeLen(net, nv.a, nv.b);
+
+    /* 유휴 차량도 **다음 간선을 미리 정해 둔다.** 비워 두면 아래의 `arriving` 이
+       켜져 모든 교차로가 정차 지점이 된다 — 처음에 전 차량이 그렇게 멈춰 섰다. */
+    if (nv.route.length === 0 && nv.job < 0 && sc.t >= nv.dwell) {
+      nv.route.push(wander(net, nv, sc.rng));
+    }
+
+    /* 앞차 — 같은 간선의 같은 방향에서 바로 앞. 없으면 다음 간선의 맨 뒤차까지
+       본다. 교차로 너머를 안 보면 정지선 앞에서 뒤차가 그대로 들이받는다. */
+    let gap: number | null = null;
+    let leadV = 0;
+    for (const o of vs) {
+      if (o.id === v.id) continue;
+      const ov = nav[o.id]!;
+      let d = Infinity;
+      if (ov.a === nv.a && ov.b === nv.b && ov.s > nv.s) d = ov.s - nv.s;
+      else if (nv.route.length && ov.a === nv.b && ov.b === nv.route[0]) d = L - nv.s + ov.s;
+      if (d < (gap ?? Infinity) + v.length) {
+        gap = d - v.length;
+        leadV = o.v;
+      }
+    }
+
+    /* 정지해야 하는 지점 — 목표 노드(승하차)이거나, 남이 점유한 교차로다.
+       둘 다 "그 자리에 선 앞차"로 환산해 IDM 에 넘긴다. 별도의 제동 로직을
+       두지 않아야 뒤차가 같은 규칙으로 자연스럽게 따라 선다. */
+    const toNode = L - nv.s;
+    // 세워야 하는 것은 **배차된 차량이 목표에 닿을 때**뿐이다.
+    const arriving = nv.job >= 0 && nv.route.length === 0;
+    const blocked = toNode < NODE_GUARD && holder[nv.b] >= 0 && holder[nv.b] !== v.id;
+    if (arriving || blocked) {
+      const d = Math.max(0, toNode - (arriving ? 0 : 2));
+      if (gap === null || d < gap) {
+        gap = d;
+        leadV = 0;
+      }
+    }
+
+    let acc = idmAccel(v.params, v.v, gap, v.v - leadV);
+    // 정차 중에는 아예 못 움직이게 눌러 둔다.
+    if (sc.t < nv.dwell) acc = v.v > 0.2 ? -v.params.b : -v.v / Math.max(dt, 1e-3);
+    /* 회전 감속 — **필요한 제동거리를 역산해서** 걸어야 한다. 교차로 앞 고정
+       거리에서 제동을 시작하게 했더니 그 거리가 제동거리보다 짧아 전 차량이
+       상시 제동 상태가 됐고(실측 평균 14km/h), 도로망이 아니라 주차장이 됐다. */
+    else if (nv.route.length && v.v > TURN_V) {
+      const A = net.nodes[nv.a]!;
+      const B = net.nodes[nv.b]!;
+      const C = net.nodes[nv.route[0]!]!;
+      const turn = Math.abs(
+        Math.atan2(C.y - B.y, C.x - B.x) - Math.atan2(B.y - A.y, B.x - A.x),
+      );
+      const bend = Math.min(turn, Math.abs(2 * Math.PI - turn));
+      if (bend > TURN_BEND) {
+        const need = (v.v * v.v - TURN_V * TURN_V) / (2 * v.params.b);
+        if (toNode < need + 4) acc = Math.min(acc, -v.params.b);
+      }
+    }
+
+    v.a = acc;
+    v.v = Math.max(0, v.v + acc * dt);
+    nv.s += v.v * dt;
+
+    /* --- 도착 판정 ----------------------------------------------------
+       **IDM 은 정지간격(s0 = 2m) 앞에서 선다.** 그래서 "노드를 지나면 도착"으로
+       잡으면 그 순간이 영영 오지 않는다 — 전 차량이 목표 2m 앞에 멈춰 선 채로
+       굳었고 TRIPS SERVED 가 0 에서 움직이지 않았다. 서 있는 것으로 판정한다. */
+    if (arriving && sc.t >= nv.dwell && toNode <= v.params.s0 + 0.8 && v.v < 0.5) {
+      nv.s = L;
+      v.v = 0;
+      arriveDispatch(sc, st, v, nv);
+    }
+
+    /* --- 간선 넘기 ---------------------------------------------------
+       정차 중이거나 목표에 닿았으면 노드에 멈춰 선다. 목표 처리는 여기서
+       한 번만 일어난다 — 처리가 끝나면 route 가 차거나 job 이 풀리므로. */
+    let guard = 0;
+    while (nv.s >= L && guard++ < 4) {
+      // 목표 도착 처리는 한 번만 일어난다 — 끝나면 route 가 차거나 job 이 풀린다.
+      if (nv.route.length === 0 && nv.job >= 0) arriveDispatch(sc, st, v, nv);
+      // 정차는 route 가 이미 채워진 뒤에도 지켜져야 한다(승차 직후가 그렇다).
+      if (sc.t < nv.dwell) {
+        nv.s = L;
+        v.v = 0;
+        break;
+      }
+      if (nv.route.length === 0) nv.route.push(wander(net, nv, sc.rng));
+      nv.a = nv.b;
+      nv.b = nv.route.shift()!;
+      nv.s -= L;
+      L = edgeLen(net, nv.a, nv.b);
+    }
+    if (nv.s > L) nv.s = L;
+  }
+
   sc.t += dt;
 }
 
+/** 목표 노드 도착 — 태우거나 내린다. */
+function arriveDispatch(sc: Scene, st: NonNullable<Scene['dispatch']>, v: Vehicle, nv: Nav): void {
+  if (nv.job < 0) return;
+  const job = st.jobs[nv.job];
+  if (!job) {
+    nv.job = -1;
+    return;
+  }
+  nv.dwell = sc.t + DISPATCH.dwell;
+  v.v = 0;
+  if (job.phase === 1) {
+    st.waitSum += sc.t - job.born;
+    job.phase = 2;
+    nv.route = routeTo(st.net, nv.b, job.dest);
+    // 목적지가 바로 여기면 그 자리에서 완료 처리한다(도달 불가도 같이 걸러진다).
+    if (nv.route.length === 0) finishDispatch(st, nv);
+    return;
+  }
+  finishDispatch(st, nv);
+}
+
+function finishDispatch(st: NonNullable<Scene['dispatch']>, nv: Nav): void {
+  st.served++;
+  const gone = nv.job;
+  st.jobs.splice(gone, 1);
+  nv.job = -1;
+  // 뒤 색인이 한 칸씩 당겨진다 — 다른 차량이 들고 있는 색인도 같이 옮긴다.
+  for (const other of st.nav) if (other.job > gone) other.job--;
+}
 /* --- 04 v2v -------------------------------------------------------- */
 
 /** 합류로 길이(m) — mergeAt 앞쪽으로 이만큼이 램프다. */
@@ -963,152 +1248,126 @@ function drawRing(ctx: CanvasRenderingContext2D, W: number, H: number, sc: Scene
   }
 }
 
-/** 배차 루프의 월드 좌표 → 화면. 직사각 회로를 따라간다. */
-function loopPoint(s: number, C: number): { x: number; y: number; a: number } {
-  const d = ((s % C) + C) % C;
-  const hw = LOOP_W / 2;
-  const hh = LOOP_H / 2;
-  if (d < LOOP_W) return { x: -hw + d, y: -hh, a: 0 };
-  if (d < LOOP_W + LOOP_H) return { x: hw, y: -hh + (d - LOOP_W), a: Math.PI / 2 };
-  if (d < 2 * LOOP_W + LOOP_H)
-    return { x: hw - (d - LOOP_W - LOOP_H), y: hh, a: Math.PI };
-  return { x: -hw, y: hh - (d - 2 * LOOP_W - LOOP_H), a: -Math.PI / 2 };
+/** 네 모서리 틱 — HudFrame 과 같은 언어. 원은 하드 룰 1 로 금지다. */
+function corners(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, t: number): void {
+  for (const [ox, oy] of [
+    [-r, -r],
+    [r - t, -r],
+    [-r, r - t],
+    [r - t, r - t],
+  ] as const) {
+    ctx.fillRect(Math.round(x + ox), Math.round(y + oy), t, t);
+  }
 }
 
 function drawDispatch(ctx: CanvasRenderingContext2D, W: number, H: number, sc: Scene, pal: Palette) {
   const st = sc.dispatch!;
-  const C = sc.circumference!;
-  const scale = Math.min(
-    (W - PAD * 2) / (LOOP_W + NODE_OUT * 2),
-    (H - PAD * 2) / (LOOP_H + NODE_OUT * 2),
-  );
-  const cx = W / 2;
-  const cy = H / 2;
-  const toS = (p: { x: number; y: number }) => ({ x: cx + p.x * scale, y: cy + p.y * scale });
+  const net = st.net;
 
-  /** 차로 폭의 절반(px). 회로를 선이 아니라 "도로"로 보이게 하는 값. */
-  const halfW = Math.max(3, Math.min(9, LOOP_H * scale * 0.16));
+  /* 축척은 가로·세로를 **따로** 잡는다.
+     계측기 캔버스의 가로세로비는 페이지마다 다르다(연구 페이지 3.8, 홈 패널 2.6).
+     한 축척으로 맞추면 한쪽에서는 화면의 절반이 빈 채로 남는다. 도시의 블록은
+     원래 정사각형이 아니므로 늘어난 격자도 도시로 읽힌다 — 다만 비가 지나치면
+     도로가 아니라 줄무늬가 되므로 1.75배까지만 허용한다. 마커가 도면 밖으로
+     나가므로 여백은 화면 픽셀로 뺀다(미터로 빼면 축척에 따라 여백이 달라진다). */
+  const MARK = 24;
+  let sx = Math.max(0.2, (W - PAD * 2 - MARK * 2) / net.w);
+  let sy = Math.max(0.2, (H - PAD * 2 - MARK * 2) / net.h);
+  const RATIO = 1.75;
+  if (sx > sy * RATIO) sx = sy * RATIO;
+  else if (sy > sx * RATIO) sy = sx * RATIO;
+  const SX = (x: number) => W / 2 + x * sx;
+  const SY = (y: number) => H / 2 + y * sy;
 
-  /** 진행 방향 왼쪽으로 오프셋한 점 — 도로 양쪽 경계를 그리는 데 쓴다. */
-  const edge = (s: number, side: number) => {
-    const p = loopPoint(((s % C) + C) % C, C);
-    const sp = toS(p);
-    return { x: sp.x - Math.sin(p.a) * halfW * side, y: sp.y + Math.cos(p.a) * halfW * side };
-  };
+  /** 차로 폭의 절반(px). 한 줄짜리 선은 "도로"로 읽히지 않는다. */
+  const halfW = Math.max(3, Math.min(9, 7.2 * Math.min(sx, sy)));
 
-  /* --- 도로 --------------------------------------------------------
-     한 줄짜리 희미한 점선은 "도로"로 읽히지 않는다. 양쪽 경계를 --line-hot 으로
-     긋고 가운데에 차선 파선을 넣어야 비로소 주행로로 보인다. */
-  const seg = 3; // m 단위 표본 간격
+  /* --- 도로 -------------------------------------------------------- */
+  for (const [a, b] of net.edges) {
+    const A = net.nodes[a]!;
+    const B = net.nodes[b]!;
+    const ax = SX(A.x);
+    const ay = SY(A.y);
+    const bx = SX(B.x);
+    const by = SY(B.y);
+    const L = Math.hypot(bx - ax, by - ay) || 1;
+    const nx = (-(by - ay) / L) * halfW;
+    const ny = ((bx - ax) / L) * halfW;
+    // 경계는 굵게(2px). 1px 점선으로는 도로망이 아니라 **연필 자국**으로 보였다.
+    ctx.fillStyle = pal.hot;
+    dots(ctx, ax + nx, ay + ny, bx + nx, by + ny, 5, 2);
+    dots(ctx, ax - nx, ay - ny, bx - nx, by - ny, 5, 2);
+    ctx.fillStyle = pal.line;
+    dots(ctx, ax, ay, bx, by, 11, 1);
+  }
+
+  /* --- 교차로 ------------------------------------------------------ */
   ctx.fillStyle = pal.hot;
-  for (let s = 0; s < C; s += seg) {
-    for (const side of [1, -1] as const) {
-      const e = edge(s, side);
-      ctx.fillRect(Math.round(e.x), Math.round(e.y), 1, 1);
-    }
-  }
-  // 중앙 차선 파선 — 6m 그리고 6m 띄운다
-  ctx.fillStyle = pal.line;
-  for (let s = 0; s < C; s += 12) {
-    for (let k = 0; k < 6; k += 2) {
-      const p = toS(loopPoint((s + k) % C, C));
-      ctx.fillRect(Math.round(p.x), Math.round(p.y), 1, 1);
-    }
-  }
+  for (const q of net.nodes) ctx.fillRect(Math.round(SX(q.x)) - 2, Math.round(SY(q.y)) - 2, 5, 5);
 
-  // 노드 위치 — 회로 바깥쪽으로 밀어낸다.
-  const nodeAt = (idx: number) => {
-    const p = loopPoint(st.nodes[idx]!, C);
-    const out = NODE_OUT;
-    const nx = p.x + (p.a === Math.PI / 2 ? out : p.a === -Math.PI / 2 ? -out : 0);
-    const ny = p.y + (p.a === 0 ? -out : p.a === Math.PI ? out : 0);
-    return { marker: toS({ x: nx, y: ny }), curb: toS(p) };
-  };
-
-  // 역할 표: 0 유휴 · 1 대기 수요 · 2 픽업 대상 · 3 하차 지점
-  const role = new Uint8Array(st.nodes.length);
-  for (const job of st.jobs) {
-    role[job.origin] = job.phase === 0 ? 1 : job.phase === 1 ? 2 : 0;
-    if (job.phase === 2) role[job.dest] = 3;
-  }
-
-  // 점멸은 계단 함수(2단계)로 낸다 — 페이드가 아니라 계측기의 깜빡임이다.
+  // 점멸은 계단 함수다 — 페이드가 아니라 계측기의 깜빡임.
   const blink = sc.t * 2.2 - Math.floor(sc.t * 2.2) < 0.62;
 
-  /* --- 배차 경로 ----------------------------------------------------
-     차량에서 목표 노드까지 **도로를 따라** 점을 찍는다.
-     직선으로 화면을 가로지르면 차량이 실제로 갈 경로와 무관해 오해를 부른다. */
-  const byId = new Map(sc.vehicles.map((v) => [v.id, v]));
+  /* --- 배차 링크 ----------------------------------------------------
+     차량에서 목표까지 **실제 경로를 따라** 점을 찍는다. 직선으로 화면을 가로지르면
+     차가 갈 길과 무관해져서, 배차가 아니라 레이저 포인터로 보인다. */
   for (const job of st.jobs) {
-    if (job.phase === 0) continue;
-    const v = byId.get(job.veh);
-    if (!v) continue;
-    const target = st.nodes[job.phase === 1 ? job.origin : job.dest]!;
-    const dist = ahead(v.x, target, C);
+    if (job.phase === 0 || job.veh < 0) continue;
+    const nv = st.nav[job.veh];
+    if (!nv) continue;
+    const p = navPoint(net, nv);
     ctx.fillStyle = job.phase === 1 ? (blink ? pal.linkOn : pal.linkOff) : pal.linkOff;
-    // 6m 간격으로 경로를 따라간다. 픽업 전(phase 1)은 밝게 점멸한다.
-    for (let d = 0; d <= dist; d += 6) {
-      const p = toS(loopPoint(v.x + d, C));
-      ctx.fillRect(Math.round(p.x), Math.round(p.y), 2, 2);
+    let px = SX(p.x);
+    let py = SY(p.y);
+    for (const k of [nv.b, ...nv.route]) {
+      const q = net.nodes[k]!;
+      dots(ctx, px, py, SX(q.x), SY(q.y), 7, 2);
+      px = SX(q.x);
+      py = SY(q.y);
     }
-    // 목표에 닿는 마지막 구간 — 노드까지 이어 붙인다
-    const nm = nodeAt(job.phase === 1 ? job.origin : job.dest);
-    dots(ctx, nm.curb.x, nm.curb.y, nm.marker.x, nm.marker.y, 3, 2);
   }
 
-  /* --- 수요 노드 ----------------------------------------------------
-     모양은 늘 같다(코너 틱 4개 — HudFrame 언어). 상태는 색과 점멸로만 말한다. */
-  for (let i = 0; i < st.nodes.length; i++) {
-    const { marker, curb } = nodeAt(i);
-    const active = role[i] !== 0;
-    const lit = role[i] === 1 ? blink : true;
-
-    ctx.fillStyle =
-      role[i] === 0
-        ? pal.hot
-        : role[i] === 1
-          ? lit
-            ? pal.node
-            : pal.humanDim
-          : role[i] === 2
-            ? pal.av
-            : pal.avDim;
-
-    // 코너 틱 — 활성 노드는 더 크게
-    const r = active ? 9 : 5;
-    const t = active ? 3 : 2;
-    for (const [ox, oy] of [
-      [-r, -r],
-      [r - t, -r],
-      [-r, r - t],
-      [r - t, r - t],
-    ] as const) {
-      ctx.fillRect(Math.round(marker.x + ox), Math.round(marker.y + oy), t, t);
+  /* --- 수요 --------------------------------------------------------
+     **기다린 만큼 커진다.** 크기가 대기시간이라, 차가 늦으면 화면에서 먼저 보인다. */
+  for (const job of st.jobs) {
+    const o = net.nodes[job.origin]!;
+    const waited = Math.min(16, sc.t - job.born);
+    const r = 8 + waited * 0.75;
+    ctx.fillStyle = job.phase === 0 ? (blink ? pal.node : pal.humanDim) : pal.avDim;
+    corners(ctx, SX(o.x), SY(o.y), job.phase === 0 ? r : 7, 3);
+    if (job.phase === 0) {
+      // 기다리는 사람 — 마커 한가운데. 배차되면 사라지고 차량이 그 자리를 잇는다.
+      ctx.fillRect(Math.round(SX(o.x)) - 1, Math.round(SY(o.y)) - 1, 3, 3);
     }
-
-    // 연석의 정차 표시 — 노드가 도로 위 어느 지점인지 못박는다
-    const cd = Math.hypot(marker.x - curb.x, marker.y - curb.y) || 1;
-    const ux = (marker.x - curb.x) / cd;
-    const uy = (marker.y - curb.y) / cd;
-    for (let k = -halfW; k <= halfW; k += 2) {
-      ctx.fillRect(Math.round(curb.x - uy * k), Math.round(curb.y + ux * k), 2, 2);
-    }
-
-    if (!active) continue;
-    // 중심점 + 연석까지 내려가는 짧은 연결선
-    ctx.fillRect(Math.round(marker.x) - 1, Math.round(marker.y) - 1, 3, 3);
-    ctx.fillStyle = pal.linkOff;
-    dots(ctx, marker.x, marker.y, curb.x, curb.y, 3, 1);
+    if (job.phase !== 2) continue;
+    // 승차한 뒤에는 목적지가 켜진다.
+    const d = net.nodes[job.dest]!;
+    ctx.fillStyle = pal.av;
+    corners(ctx, SX(d.x), SY(d.y), 8, 3);
   }
 
   /* --- 차량 --------------------------------------------------------
-     배차된 차량은 밝은 시안, 유휴는 흐리게. 정차 중이면 제동등이 켜진다. */
-  const carLen = Math.max(5, CAR_LEN * scale * 1.4);
-  const carWid = Math.max(3, halfW * 1.3);
+     우측통행으로 반 차로 비킨다 — 마주 오는 차와 겹치지 않는다. */
+  const carLen = Math.max(7, CAR_LEN * Math.min(sx, sy) * 1.8);
+  const carWid = Math.max(3, halfW * 1.05);
   for (const v of sc.vehicles) {
-    const p = loopPoint(v.x, C);
-    const sp = toS(p);
-    car(ctx, sp.x, sp.y, p.a, carLen, carWid, st.busy[v.id] ? pal.av : pal.avDim, brakeOf(v, pal));
+    const nv = st.nav[v.id];
+    if (!nv) continue;
+    const p = navPoint(net, nv);
+    const A = net.nodes[nv.a]!;
+    const B = net.nodes[nv.b]!;
+    // 각도는 **화면 좌표**에서 잰다 — 가로·세로 축척이 달라 월드 각과 다르다.
+    const ang = Math.atan2(SY(B.y) - SY(A.y), SX(B.x) - SX(A.x));
+    car(
+      ctx,
+      SX(p.x) - Math.sin(ang) * halfW * 0.5,
+      SY(p.y) + Math.cos(ang) * halfW * 0.5,
+      ang,
+      carLen,
+      carWid,
+      nv.job >= 0 ? pal.av : pal.avDim,
+      brakeOf(v, pal),
+    );
   }
 }
 

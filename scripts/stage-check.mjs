@@ -1,13 +1,19 @@
 /**
  * 연구 무대 실측.
  *
- * 무대는 **옆으로 넘기는 덱**이다. 그래서 훑는 방향도 두 개다:
+ * 무대는 **세로로 지나가는 네 화면**이다. 한 분야가 한 화면을 쓰고, 그 화면을
+ * 지나는 동안 배경 도로의 카메라가 그 분야의 자리로 옮겨 간다.
  *
- *   ① 세로 — 시점이 **무대에서만** 오르내리는가 (그 전후로는 대시캠 1.3m)
- *   ② 가로 — 패널을 하나씩 넘기며 그 막이 실제로 서는가
+ *   ① 문서 전체를 훑어 시점이 **무대에서만** 오르내리는지 본다
+ *   ② 무대를 천천히 지나며 막이 차례로 서는지 본다
  *
- * 가로에서 확인하는 것:
- *   · 넘긴 패널의 막만 만개한다 (두 개가 동시에 서면 실패)
+ * **② 는 반드시 스크롤로 지나가야 한다.** 이 사이트에서 배경의 시뮬레이션 시각은
+ * 주행거리(= 스크롤)로만 흐른다 — 한 자리에 세워 두고 기다리면 도로가 얼어 있어서
+ * 파동도, 승객도, 합류도 영영 일어나지 않는다. 한 화면(860px)을 지나면 44.7m 를
+ * 달리므로(`M_PER_PX` 0.052) 한 막의 연출 한 바퀴(38m)가 그 안에 들어간다.
+ *
+ * 지나면서 확인하는 것:
+ *   · 그 구역의 막만 만개한다 (두 개가 동시에 서면 실패)
  *   · 막마다 카메라가 **다른 자리**에 선다 — 같은 구도면 주석만 바뀐 것이다
  *   · 차간이 불규칙하다 (자로 잰 듯 일정하면 실패)
  *   · 옆 차로에 stop-and-go 파동이 실제로 있다
@@ -49,12 +55,13 @@ const read = async () =>
     const c = document.querySelector('canvas');
     const rp = c?.roadProbe;
     const cs = getComputedStyle(document.documentElement);
-    const room = document.querySelector('[data-deck-room]');
-    const track = document.querySelector('[data-deck]');
+    const stage = document.querySelector('[data-road-stage]');
+    const acts = [...document.querySelectorAll('[data-act]')];
     return {
       probe: rp
         ? {
             camY: rp.camY,
+            z: rp.z,
             rise: rp.rise,
             cars: rp.cars,
             peds: rp.peds,
@@ -71,8 +78,8 @@ const read = async () =>
           }
         : null,
       css: [0, 1, 2, 3].map((i) => Number(cs.getPropertyValue(`--a${i}`) || 0)),
-      roomTop: room ? Math.round(room.getBoundingClientRect().top) : null,
-      deckX: track ? Math.round(track.scrollLeft) : null,
+      stageTop: stage ? Math.round(stage.getBoundingClientRect().top) : null,
+      actTops: acts.map((a) => Math.round(a.getBoundingClientRect().top)),
       scroll: Math.round(window.scrollY),
       docH: document.documentElement.scrollHeight,
     };
@@ -116,45 +123,57 @@ say(
   `무대를 지나면 다시 대시캠으로 내려온다 (camY ${vert[vert.length - 1].camY.toFixed(2)}m)`,
 );
 
-/* ── ② 가로: 패널을 하나씩 넘긴다 ──────────────────────────────── */
-const start = await p.evaluate(() => {
-  const r = document.querySelector('[data-deck-room]').getBoundingClientRect();
-  return Math.round(r.top + window.scrollY + 60);
+/* ── ② 무대를 천천히 지난다 ────────────────────────────────────────
+   막의 진행도는 `(0.3H − 요소 top) / 요소 높이` 다. 그래서 막 i 를 진행도 t 에
+   세우려면 `scrollY = 요소의 문서 위치 − 0.3H + t × 높이` 로 간다. 한 걸음씩
+   실제로 스크롤해야 도로가 그만큼 달리고 연출이 흐른다. */
+const geo = await p.evaluate(() => {
+  const acts = [...document.querySelectorAll('[data-act]')];
+  return {
+    tops: acts.map((a) => Math.round(a.getBoundingClientRect().top + window.scrollY)),
+    h: Math.round(acts[0].getBoundingClientRect().height),
+    vh: window.innerHeight,
+  };
 });
-await p.evaluate((y) => window.scrollTo(0, y), start);
+/** 첫 막이 들어오기 직전부터 마지막 막이 빠져나간 직후까지. */
+const yAt = (i, t) => Math.round(geo.tops[i] - geo.vh * 0.3 + geo.h * t);
+const y0 = yAt(0, -0.35);
+const y1 = yAt(3, 1.25);
+const STEPS = 4 * SAMPLES;
+
+await p.evaluate((y) => window.scrollTo(0, y), y0);
 await new Promise((r) => setTimeout(r, 900));
 
-console.log('\n② 가로 넘기기 (무대 위)');
-console.log('    패널   camY   rise   막(a0 a1 a2 a3)     차간σ   옆차로 속도대   겹침');
+console.log('\n② 무대 지나가기 (세로)');
+console.log('    구역   camY   rise   막(a0 a1 a2 a3)     차간σ   옆차로 속도대   겹침');
 console.log('    ' + '─'.repeat(70));
 
 const rows = [];
-for (let k = 0; k < 4; k++) {
-  await p.evaluate((i) => {
-    const t = document.querySelector('[data-deck]');
-    t.scrollTo({ left: t.clientWidth * i });
-  }, k);
-  await new Promise((r) => setTimeout(r, 900));
-  for (let d = 0; d < SAMPLES; d++) {
-    // 세로로는 움직이지 않는다 — 무대 위의 도로는 스스로 달린다.
-    await new Promise((r) => setTimeout(r, DWELL_MS / SAMPLES));
-    const s = await read();
-    if (!s.probe) continue;
-    const g = s.probe.gaps;
-    const mean = g.reduce((a, v) => a + v, 0) / (g.length || 1);
-    const sd = Math.sqrt(g.reduce((a, v) => a + (v - mean) ** 2, 0) / (g.length || 1));
-    rows.push({ k, ...s.probe, sd, mean, css: s.css });
-    if (d === SAMPLES - 1) {
-      const bar = s.probe.acts
-        .map((a) => (a > 0.66 ? '█' : a > 0.33 ? '▓' : a > 0.05 ? '░' : '·'))
-        .join('');
-      console.log(
-        `    ${String(k + 1).padStart(4)}  ${s.probe.camY.toFixed(2).padStart(5)}m  ` +
-          `${s.probe.rise.toFixed(2)}  ${bar}  ${s.probe.acts.map((a) => a.toFixed(2)).join(' ')}  ` +
-          `${sd.toFixed(2)}m  ${s.probe.waveBand[0].toFixed(0).padStart(3)}–${s.probe.waveBand[1].toFixed(0)}km/h  ` +
-          `${String(s.probe.overlap).padStart(4)}`,
-      );
-    }
+let shown = -1;
+for (let i = 0; i <= STEPS; i++) {
+  await p.evaluate((y) => window.scrollTo(0, y), Math.round(y0 + ((y1 - y0) * i) / STEPS));
+  await new Promise((r) => setTimeout(r, DWELL_MS / SAMPLES));
+  const s = await read();
+  if (!s.probe) continue;
+  // 어느 막에 서 있는지는 **그 프레임의 값**이 정한다 — 스크롤 위치로 가늠하지 않는다.
+  const peak = Math.max(...s.probe.acts);
+  if (peak < 0.5) continue;
+  const k = s.probe.acts.indexOf(peak);
+  const g = s.probe.gaps;
+  const mean = g.reduce((a, v) => a + v, 0) / (g.length || 1);
+  const sd = Math.sqrt(g.reduce((a, v) => a + (v - mean) ** 2, 0) / (g.length || 1));
+  rows.push({ k, ...s.probe, sd, mean, css: s.css });
+  if (k !== shown) {
+    shown = k;
+    const bar = s.probe.acts
+      .map((a) => (a > 0.66 ? '█' : a > 0.33 ? '▓' : a > 0.05 ? '░' : '·'))
+      .join('');
+    console.log(
+      `    ${String(k + 1).padStart(4)}  ${s.probe.camY.toFixed(2).padStart(5)}m  ` +
+        `${s.probe.rise.toFixed(2)}  ${bar}  ${s.probe.acts.map((a) => a.toFixed(2)).join(' ')}  ` +
+        `${sd.toFixed(2)}m  ${s.probe.waveBand[0].toFixed(0).padStart(3)}–${s.probe.waveBand[1].toFixed(0)}km/h  ` +
+        `${String(s.probe.overlap).padStart(4)}`,
+    );
   }
 }
 
@@ -166,7 +185,7 @@ for (let k = 0; k < 4; k++) {
   const cssPeak = Math.max(...on.map((r) => r.css[k]));
   say(
     peak > 0.9 && cssPeak > 0.9,
-    `0${k + 1} 패널을 넘기면 0${k + 1}막이 선다 (캔버스 ${peak.toFixed(2)} · CSS ${cssPeak.toFixed(2)})`,
+    `0${k + 1} 구역을 지날 때 0${k + 1}막이 선다 (캔버스 ${peak.toFixed(2)} · CSS ${cssPeak.toFixed(2)})`,
   );
 }
 const clash = rows.filter((r) => r.acts.filter((a) => a > 0.85).length > 1);
@@ -234,6 +253,11 @@ say(
   `02막 교란이 뒷차로 전파된다 (VEH ${maxFront}/${rows[0].speed.length} · ${maxReach.toFixed(0)}m 뒤까지)`,
 );
 
+/* 판정 전에 03막 한가운데로 되돌아간다 — 훑기가 끝난 자리는 무대 밖이라
+   아무 시뮬도 안 보이고, 그러면 "하나만 돈다"가 공짜로 통과한다. */
+await p.evaluate((y) => window.scrollTo(0, y), yAt(2, 0.5));
+await new Promise((r) => setTimeout(r, 1200));
+
 /* 시뮬레이션은 **보이는 것 하나만** 돈다. 넷이 동시에 돌면 배터리도 프레임도 없다.
    캔버스 한가운데 띠의 픽셀이 변하는지로 잰다 — rAF 를 세는 것보다 정직하다. */
 const busy = await p.evaluate(async () => {
@@ -255,26 +279,24 @@ const busy = await p.evaluate(async () => {
   return a.map((v, i) => v !== c2[i]);
 });
 say(
-  busy.filter(Boolean).length === 1 && busy[3] === true,
-  `지금 선 패널의 시뮬만 돌아간다 (구동 ${busy.map((v) => (v ? '●' : '○')).join('')})`,
+  busy.filter(Boolean).length === 1 && busy[2] === true,
+  `지금 선 구역의 시뮬만 돌아간다 (구동 ${busy.map((v) => (v ? '●' : '○')).join('')})`,
 );
 
-/* 넘길 수 있다는 것을 알리는 장치가 실제로 넘기는가. 스크립트 없이 앵커만으로
-   도는 구조라, 링크가 빠지면 덱은 넘길 수 없는 채로 조용히 남는다. */
-await p.evaluate(() => document.querySelector('[data-deck]').scrollTo({ left: 0, behavior: 'auto' }));
-await new Promise((r) => setTimeout(r, 900));
-const yBefore = await p.evaluate(() => window.scrollY);
-await p.evaluate(() =>
-  document.querySelector('[data-act="0"]').querySelector('a[href^="#area-"]').click(),
+/* 막은 **순서대로** 지나가야 한다. 배열 순서(`RESEARCH`)·`ACT_*` 상수·`ACT_CAM`
+   표 셋 중 하나만 어긋나도 여기서 순서가 뒤집힌다 — 실제로 01·02 를 맞바꿀 때
+   한 곳을 빠뜨려 속도 막대가 엉뚱한 막에서 선 적이 있다. */
+const order = rows.map((r) => r.k).filter((k, i, a) => k !== a[i - 1]);
+const ascending = order.every((k, i) => i === 0 || k === order[i - 1] + 1);
+say(
+  ascending && order.length === 4,
+  `막이 01→04 순서대로 지나간다 (${order.map((k) => `0${k + 1}`).join('→')})`,
 );
-await new Promise((r) => setTimeout(r, 1500));
-const stepped = await p.evaluate(() => {
-  const t = document.querySelector('[data-deck]');
-  return { x: Math.round(t.scrollLeft), w: t.clientWidth, y: window.scrollY };
-});
-stepped.dy = Math.round(stepped.y - yBefore);
-say(stepped.x === stepped.w, `▸ 를 누르면 다음 분야로 넘어간다 (scrollLeft ${stepped.x}/${stepped.w})`);
-say(Math.abs(stepped.dy) <= 2, `넘길 때 페이지가 세로로 튀지 않는다 (${stepped.dy}px)`);
+
+/* 무대를 지나는 동안 도로가 **실제로 달렸는가.** 세로 무대에서 시뮬 시각은
+   주행거리로만 흐르므로, 이게 0 이면 위의 연출 판정이 전부 우연이다. */
+const drove = rows[rows.length - 1].z - rows[0].z;
+say(drove > 100, `무대를 지나며 도로가 달린다 (${drove.toFixed(0)}m)`);
 
 await p.screenshot({ path: process.argv[3] ?? '/tmp/stage.png' });
 await b.close();

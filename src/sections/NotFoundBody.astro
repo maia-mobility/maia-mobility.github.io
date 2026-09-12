@@ -1,116 +1,162 @@
 ---
-import Button from '../components/Button';
+/*
+ * 404 — 반사되어 돌아오지 않은 신호.
+ *
+ * 다섯 콘텐츠 페이지는 전부 본문 기둥이 **왼쪽**에 붙는다. 여기만 오른쪽으로
+ * 민다 — 막다른 길이라 축이 어긋나 있어야 "여기는 그 페이지가 아니다"가 글을
+ * 읽기 전에 먼저 전달된다(홈의 닫는 구역이 쓰는 어휘와 같다).
+ *
+ * 숫자를 붉게 칠하지 않는다. intensity 램프(--i-0‥--i-6)는 포인트클라우드와 그
+ * 위의 시뮬레이션 안에서만 쓴다 — 화면 요소에 경고색을 바르면 이 사이트에서
+ * 색을 가진 것이 도로 하나라는 전제가 깨진다. 대신 숫자를 헤어라인 광도로
+ * 크게 세운다. 되돌아갈 곳은 방위 목록으로 준다 — 막다른 길로 두지 않는다.
+ */
 import { href, pick, type Lang } from '../i18n';
 import { NAV, UI } from '../i18n/ui';
 
-interface Props { lang: Lang }
+interface Props {
+  lang: Lang;
+}
 const { lang } = Astro.props;
+
+const t = (v: Parameters<typeof pick>[0]) => pick(v, lang);
 ---
 
-<section class="container wrap" data-quiet>
-  <p class="code" aria-hidden="true">404</p>
+<div class="page">
+  <section class="lost" data-quiet>
+    <p class="code" aria-hidden="true">404</p>
 
-  <h1 class="title" lang={lang}>{pick(UI.notFoundTitle, lang)}</h1>
+    <h1 class="title">{t(UI.notFoundTitle)}</h1>
+    <p class="body">{t(UI.notFoundBody)}</p>
 
-  <p class="body" lang={lang}>{pick(UI.notFoundBody, lang)}</p>
-
-  {/* 되돌아갈 곳 — 막다른 길로 두지 않는다 */}
-  <nav class="links" aria-label={pick(UI.menu, lang)}>
-    <ul class="list">
-      {NAV.map((item) => (
-        <li>
-          <a class="link" href={href(item.key, lang)}>
-            <span class="idx" aria-hidden="true">{item.index}</span>
-            {pick(item.label, lang)}
-          </a>
-        </li>
-      ))}
-    </ul>
-  </nav>
-
-  <Button href={href('', lang)}>{pick(UI.backHome, lang)}</Button>
-</section>
+    <nav class="bearings" aria-label={pick(UI.menu, lang)}>
+      <ul>
+        {
+          NAV.map((item) => (
+            <li>
+              <a href={href(item.key, lang)}>
+                <span class="bNo">{item.index}</span>
+                <span class="bName">{pick(item.label, lang)}</span>
+                <span class="bGo" aria-hidden="true">
+                  ▸
+                </span>
+              </a>
+            </li>
+          ))
+        }
+      </ul>
+    </nav>
+  </section>
+</div>
 
 <style>
-  .wrap {
+  .page {
     display: grid;
-    gap: var(--space-3);
-    justify-items: start;
-    padding-block: var(--space-9) var(--section-y);
-    min-height: 60svh;
+    min-block-size: 84svh;
     align-content: center;
+    padding-block: var(--space-9) var(--space-8);
+    padding-inline: var(--gutter);
   }
 
-  /* 반사되어 돌아오지 않은 신호 — 숫자를 계측값처럼 취급한다 */
+  /* 오른쪽으로 민 기둥 — 다른 페이지와 축이 어긋나 있는 것이 이 페이지의 신호다. */
+  .lost {
+    inline-size: min(100%, 34rem);
+    justify-self: end;
+    display: grid;
+    justify-items: start;
+    gap: var(--space-3);
+  }
+
+  /* 돌아오지 않은 신호. 경고색이 아니라 헤어라인 광도의 큰 숫자다. */
   .code {
-    font-family: var(--font-mono);
-    font-size: var(--t-micro);
-    letter-spacing: var(--track-label);
-    color: var(--i-6);
-    border: var(--hair) solid var(--i-6);
-    padding: 3px var(--space-1);
     margin: 0;
+    font-family: var(--font-mono);
+    font-size: clamp(3.5rem, 2rem + 6vw, 7rem);
+    line-height: 0.9;
+    letter-spacing: 0.02em;
+    color: var(--line-hot);
+    font-variant-numeric: tabular-nums;
+    user-select: none;
   }
 
   .title {
-    font-family: var(--font-sans);
-    font-size: var(--t-h1);
-    font-weight: var(--w-light);
-    line-height: var(--lh-0);
-    letter-spacing: var(--track-display);
-    color: var(--fg);
     margin: 0;
+    font-family: var(--font-sans);
+    font-size: clamp(1.8rem, 1.2rem + 2vw, 2.8rem);
+    font-weight: var(--w-light);
+    line-height: 1.06;
+    letter-spacing: -0.032em;
+    color: var(--fg);
     text-wrap: balance;
   }
 
   .body {
-    max-width: var(--measure);
+    margin: 0;
+    max-inline-size: 44ch;
     font-size: var(--t-base);
     line-height: var(--lh-body);
     color: var(--fg-mute);
-    margin: 0;
     text-wrap: pretty;
   }
 
-  .links {
-    width: 100%;
-    margin-top: var(--space-3);
-    padding-top: var(--space-3);
-    border-top: var(--hair) dotted var(--scan);
+  /* ---- 방위 목록 ------------------------------------------------------- */
+  .bearings {
+    inline-size: 100%;
+    margin-block-start: var(--space-4);
   }
-
-  .list {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--space-1) var(--space-4);
+  .bearings ul {
     list-style: none;
     margin: 0;
     padding: 0;
+    display: grid;
+    border-block-start: var(--hair) dotted var(--scan);
   }
-
-  .link {
-    display: inline-flex;
-    align-items: baseline;
-    gap: var(--space-1);
-    min-height: var(--tap-min);
-    text-decoration: none;
-    font-family: var(--font-mono);
-    font-size: var(--t-mono-sm);
-    letter-spacing: var(--track-mono);
+  .bearings li + li {
+    border-block-start: var(--hair) dotted var(--scan);
+  }
+  .bearings a {
+    display: grid;
+    grid-template-columns: 2.4rem minmax(0, 1fr) 1rem;
+    gap: var(--space-2);
+    align-items: center;
+    min-block-size: var(--tap-min);
     color: var(--fg-mute);
+    text-decoration: none;
     transition: color var(--dur-fast) var(--ease-out);
   }
-
-  .link:hover {
-    color: var(--accent);
+  .bearings a:hover,
+  .bearings a:focus-visible {
+    color: var(--fg);
   }
-
-  .idx {
+  .bNo {
+    font-family: var(--font-mono);
     font-size: var(--t-micro);
+    letter-spacing: var(--track-mono);
     color: var(--fg-dim);
+    font-variant-numeric: tabular-nums;
+  }
+  .bName {
+    font-size: var(--t-sm);
+    line-height: var(--lh-2);
+  }
+  .bGo {
+    justify-self: end;
+    color: var(--line-hot);
+    transition: color var(--dur-fast) var(--ease-out);
+  }
+  .bearings a:hover .bGo,
+  .bearings a:focus-visible .bGo {
+    color: var(--accent);
   }
 
-  .link:hover .idx {
-    color: var(--accent);
+  @media (max-width: 48rem) {
+    /* 좁은 화면에서는 기둥이 폭을 다 쓰므로 밀 자리가 없다 — 축을 왼쪽으로 되돌린다. */
+    .lost {
+      justify-self: stretch;
+      inline-size: 100%;
+    }
+    .page {
+      padding-block: var(--space-8) var(--space-7);
+    }
   }
 </style>
