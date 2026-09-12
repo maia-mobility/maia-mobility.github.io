@@ -19,10 +19,15 @@ on:
     branches: [main]
   workflow_dispatch:
 
+# 워크플로 전체 기본값은 **읽기만**. 필요한 권한은 각 작업이 스스로 선언한다.
 permissions:
   contents: read
-  pages: write
-  id-token: write
+
+# 액션은 **커밋 SHA 로 고정한다.**
+# `@v7` 같은 태그는 그 저장소 관리자가 언제든 다른 커밋으로 옮길 수 있다. 태그를
+# 참조하면 남이 옮긴 코드가 우리 빌드에서 그대로 실행된다 — 실제로 이 경로로 털린
+# 사례가 여럿 있다. SHA 는 옮길 수 없다.
+# 버전 갱신은 Dependabot 이 PR 로 올린다(.github/dependabot.yml).
 
 # 배포는 한 번에 하나만. 진행 중인 것을 취소하지는 않는다.
 concurrency:
@@ -32,10 +37,13 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    # 빌드는 소스를 읽기만 한다.
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
           cache: npm
@@ -45,23 +53,30 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      - name: Secret scan
+        run: npm run lint:secrets
+
       - name: Build
         run: npm run build
         env:
           SITE_URL: ${{ vars.SITE_URL || 'https://example.github.io' }}
           BASE_PATH: ${{ vars.BASE_PATH }}
 
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
           path: dist
 
   deploy:
     needs: build
     runs-on: ubuntu-latest
+    # Pages 배포에만 필요한 권한. 소스 쓰기 권한은 어느 작업에도 없다.
+    permissions:
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1

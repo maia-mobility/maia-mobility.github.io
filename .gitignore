@@ -8,9 +8,13 @@ node_modules/
 # 기존 Wix 사이트에서 받은 AI 생성 스톡 이미지 — 쓰지 않고 보관만 한다
 _archive/
 
-# env
+# env — **예시 파일만 빼고 전부 막는다.**
+# 예전에는 `.env` 와 `.env.production` 두 개만 이름으로 막았다. 그러면
+# `.env.local`·`.env.배포용`·`.env.bak` 같은 이름이 그대로 커밋된다.
+# 한 번 푸시된 비밀은 커밋을 되돌려도 히스토리와 포크에 남는다 — 막는 쪽이 싸다.
 .env
-.env.production
+.env.*
+!.env.example
 
 # macOS
 .DS_Store

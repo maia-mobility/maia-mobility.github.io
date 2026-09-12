@@ -1,0 +1,22 @@
+# 의존성·액션 버전 갱신을 PR 로 받는다.
+#
+# 액션을 커밋 SHA 로 고정해 두었기 때문에(deploy.yml) 사람이 직접 올리기 어렵다 —
+# Dependabot 이 SHA 와 옆의 버전 주석을 같이 갱신해 준다. 고정과 갱신은 한 쌍이다.
+# 고정만 하고 갱신을 안 하면 몇 년 뒤 아무도 못 건드리는 낡은 액션이 남는다.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: 'ci'
+
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: 'deps'
+    # 보안 패치가 아닌 일반 갱신은 한 번에 하나씩 — 무엇이 깨졌는지 알기 위해.
+    open-pull-requests-limit: 3
