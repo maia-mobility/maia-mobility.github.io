@@ -1825,6 +1825,22 @@ const GLYPH_PS = 1.6;
 /** 비행 경로가 도로 쪽으로 처지는 정도(화면 높이 대비, 중간에서 최대). */
 const GLYPH_SAG = 0.04;
 /**
+ * **수렴이 시작되는 지점(비행 진행도 e).** 이 앞에서는 점이 글자 자리에 머물며
+ * 풀어지기만 하고, 뒤의 짧은 구간에서 한꺼번에 차로 모인다.
+ *
+ * 없을 때 무슨 일이 났는가: 위치를 `smooth(e)` 로 이으면 비행 중반에 점이 이미
+ * 목표의 절반 거리에 와 있다. 먼 차는 화면에서 20px 남짓이라 그 차로 가는 수백
+ * 점의 궤적이 중반에 벌써 좁게 모여 **도착 전에 차 윤곽이 보인다**(교수님이 그
+ * 화면을 잡았다). 도로는 도착 직전까지 비어 있어야 한다.
+ *
+ * 색 갈아타기·포그·감쇠·크기도 전부 이 수렴 진행도를 따른다 — 공중에 떠 있는
+ * 점이 차체 색을 띠면 그것도 같은 이유로 "이미 차가 있다"로 읽힌다.
+ */
+const GLYPH_CONV = 0.68;
+/** 수렴 전 드리프트(px) — 글자가 **자기 자리에서** 풀어지는 정도. 가로·세로. */
+const GLYPH_DRIFT_X = 16;
+const GLYPH_DRIFT_Y = 30;
+/**
  * 글자 점이 켜지는 구간(**치환 구간 대비** 비율). 치환보다 조금 빨리 끝난다 —
  * DOM 글자가 마지막으로 옅어지는 동안 점은 이미 다 켜져 있어야, 글자가 꺼지는
  * 순간 자리에 남는 것이 온전한 점-글자다.
@@ -1862,8 +1878,16 @@ interface Glyphs {
   hold: Float32Array;
   /** 1 / (1 − hold). 이산 진행도를 한 번의 곱으로 구한다. */
   mv: Float32Array;
-  /** 잉크 버킷에서 차체 버킷으로 갈아타는 지점(e) */
+  /** 잉크 버킷에서 차체 버킷으로 갈아타는 지점(**수렴** 진행도 c) */
   sw: Float32Array;
+  /** 수렴 전 드리프트 방향·세기 −1…1 */
+  dr: Float32Array;
+  /**
+   * **비행이 시작되는 순간의 화면 y.** 글자에서 풀린 점은 그 자리에서 문서를 떠나
+   * 센서의 화면에 머문다 — 문서 좌표를 계속 따르면 글자와 함께 화면 위끝으로
+   * 밀려 나가 버린다(실측: 스크롤 350px 에서 점의 39%가 잘려 사라졌다).
+   */
+  fy: Float32Array;
   /** 우리 차로 대열이 받을 구간 [시작, 개수] */
   laneOff: number;
   laneN: number;
@@ -2092,6 +2116,8 @@ function bakeGlyphs(vh: number, cap: number, mobile: boolean): Glyphs | null {
     k: new Float32Array(n),
     hold: new Float32Array(n),
     mv: new Float32Array(n),
+    dr: new Float32Array(n),
+    fy: new Float32Array(n),
     sw: new Float32Array(n),
     laneOff: 0,
     laneN: lane.length,
@@ -2122,6 +2148,9 @@ function bakeGlyphs(vh: number, cap: number, mobile: boolean): Glyphs | null {
        늦게 잡는다: 도중에 벌써 차체 색이면 허공에 파란 점 무리가 뜬 것으로 보인다.
        거의 닿아서 바뀌어야 **글자가 차가 된 것**으로 읽힌다. */
     out.sw[i] = 0.55 + rnd() * 0.3;
+    out.dr[i] = rnd() * 2 - 1;
+    // 비행이 시작되는 hp = d + hold/k. 그 순간의 스크롤을 빼 두면 화면 y 가 된다.
+    out.fy[i] = p[1]! - (startHp + (hold + lag) * run) * vh;
   }
   return out;
 }
@@ -2461,6 +2490,10 @@ export interface RoadProbe {
     move: number;
     /** 화면 위끝 밖으로 밀려 안 그려진 글자 점 수 */
     clipTop: number;
+    /** 이번 프레임에 찍은 글자 점 중 **목표 차 상자 안**에 든 비율 0…1 (유령 윤곽) */
+    ghost: number;
+    /** 차체 색으로 갈아탄 글자 점의 비율 0…1 */
+    swapped: number;
     /** `hp` 의 자(px) — 여는 화면의 실제 길이 */
     span: number;
     /** 전 글자 공통 일정(스크롤 px) — [치환 시작, 치환 끝, 도착] */
@@ -3098,7 +3131,7 @@ export function usePointCloud(
       glyphOn && gl0
         ? smooth(
             clamp01(
-              (smooth(clamp01((clamp01((hp - gl0.t0) * gl0.tk) - gl0.h0) * gl0.m0)) - 0.7) / 0.3,
+              (smooth(clamp01((clamp01((hp - gl0.t0) * gl0.tk) - gl0.h0) * gl0.m0)) - 0.85) / 0.15,
             ),
           )
         : 1;
@@ -3745,6 +3778,11 @@ export function usePointCloud(
     let moveN = 0;
     /** 화면 **위끝 밖**으로 밀려 안 그려진 글자 점 — 비행이 잘리는지 보는 창구. */
     let clipTop = 0;
+    /** 목표 차 상자 안에 들어온 글자 점 · 차체 색으로 갈아탄 글자 점. */
+    let ghostN = 0;
+    let swapN = 0;
+    /** 지금 그리는 차의 화면 폭(px) — 유령 계측의 자. `drawCar` 가 채운다. */
+    let gCarPx = 0;
 
     /** bin 에 넣는 마지막 한 걸음 — `emit` 의 꼬리와 같다. 글자 점 전용. */
     const putInk = (sx: number, sy: number, b: number, a: number, ps: number): void => {
@@ -3792,16 +3830,32 @@ export function usePointCloud(
       const eRaw = clamp01((hp - gl.d[i]!) * gl.k[i]!);
       const hold = gl.hold[i]!;
       const e = smooth(clamp01((eRaw - hold) * gl.mv[i]!));
+      /* **수렴은 비행의 뒷부분에서만 일어난다**(§GLYPH_CONV). `e` 는 언제 풀리고
+         언제 닿는가의 시계이고, `c` 는 실제로 차 쪽으로 간 정도다. 위치·색·포그·
+         감쇠·크기가 전부 `c` 를 따른다. */
+      const c = smooth(clamp01((e - GLYPH_CONV) / (1 - GLYPH_CONV)));
       const lx = gl.dx[i]! - scrollX;
       const ly = gl.dy[i]! - scrollY;
       const inv = f / dz;
       const tx = cx + (x - camX) * inv;
       const ty = cy + (camY - y) * inv + (tx - cx) * roll;
-      const sx = lx + (tx - lx) * e;
+      /* 수렴 전에는 **자기 자리에서** 풀어진다 — 가로로 조금 벌어지고 아래로
+         처진다. 목표 쪽으로 가는 것이 아니라 글자가 흐트러지는 것이다. */
+      const drift = (1 - c) * e;
+      const dr = gl.dr[i]!;
+      /* 풀린 점은 **문서를 떠나 화면에 머문다.** 글자 자리를 계속 따르면 글자와
+         함께 화면 위끝으로 밀려 나간다 — 도로로 들어가는 것이 아니라 위로
+         사라지는 것이 된다(실측: 스크롤 350px 에서 39%가 잘렸다). 치환 중(e = 0)
+         에는 글자에 붙어 있어야 하므로 그때만 문서 좌표를 쓴다. 두 값은 비행이
+         시작되는 순간 정확히 같아서 이어지는 자리에 틈이 없다. */
+      const hy = e > 0 ? gl.fy[i]! : ly;
+      const bx = lx + dr * GLYPH_DRIFT_X * drift;
+      const by = hy + (0.45 + 0.55 * (dr < 0 ? -dr : dr)) * GLYPH_DRIFT_Y * drift;
+      const sx = bx + (tx - bx) * c;
       if (sx < -8 || sx > W + 8) return;
       // 약하게 처진다. 직선으로 이으면 글자에서 차까지가 **하늘을 가로지르는 선**
       // 이라 도로와 무관해 보인다. 튀거나 도는 궤적은 이 사이트가 아니다.
-      const sy = ly + (ty - ly) * e + GLYPH_SAG * H * 4 * e * (1 - e);
+      const sy = by + (ty - by) * c + GLYPH_SAG * H * 4 * c * (1 - c);
       if (sy < -8) {
         clipTop++;
         return;
@@ -3810,7 +3864,7 @@ export function usePointCloud(
 
       let fog = 1 - dz * INV_FAR;
       if (fog < 0) fog = 0;
-      fog = 1 + (fog - 1) * e;
+      fog = 1 + (fog - 1) * c;
 
       let shade = 1;
       if (cowlOn) {
@@ -3829,29 +3883,34 @@ export function usePointCloud(
         else if (qy >= QH) qy = QH - 1;
         shade *= quiet[qy * QW + qx]!;
       }
-      shade = 1 + (shade - 1) * e;
+      shade = 1 + (shade - 1) * c;
 
       // 켜지는 것은 **치환 구간의 시계**(eRaw)로 한다. 이산 진행도로 켜면 날아가기
       // 시작할 때 켜져서, 글자가 꺼진 자리에 아무것도 없는 순간이 생긴다.
       const la = gl.a[i]! * clamp01(eRaw / (hold * GLYPH_IN));
-      let a = (la + (alpha - la) * e) * fog * shade;
+      let a = (la + (alpha - la) * c) * fog * shade;
       /* LOD 밖의 자리는 도착 직전에 꺼진다. 그래야 hp = 1 에서 `drawCar` 가
          찍는 lod 개의 점과 **정확히 같은 집합**이 남는다. */
-      if (spare) a *= 1 - smooth(clamp01((e - 0.9) * 10));
+      if (spare) a *= 1 - smooth(clamp01((c - 0.9) * 10));
       if (a < 0.05) return;
       if (a > 1) a = 1;
 
-      const psF = GLYPH_PS + (size * inv - GLYPH_PS) * e;
+      const psF = GLYPH_PS + (size * inv - GLYPH_PS) * c;
       let ps = (psF + 0.5) | 0;
       if (ps < 1) ps = 1;
       else if (ps > 9) ps = 9;
 
-      // 계측: 실제로 찍힌 점이 글자 자리에서 얼마나 옮겨 갔는가(검사기 전용).
+      /* 계측(검사기 전용): 옮겨 간 거리, **목표 차 상자 안에 들어온 점**(= 유령
+         윤곽), 차체 색으로 갈아탄 점. 도착 전 구간에서 뒤 둘이 0 이어야 한다. */
       moveSum += Math.abs(sx - lx) + Math.abs(sy - ly);
       moveN++;
+      const near = gCarPx * 0.2 + 1;
+      if (Math.abs(sx - tx) < near && Math.abs(sy - ty) < near) ghostN++;
+      const swapped = c >= gl.sw[i]!;
+      if (swapped) swapN++;
 
       // 색은 도중에 **갈아탄다**. 두 색을 겹쳐 크로스페이드하면 점이 두 배가 된다.
-      putInk(sx, sy, e < gl.sw[i]! ? gl.b[i]! : b, a, ps);
+      putInk(sx, sy, swapped ? b : gl.b[i]!, a, ps);
     };
 
     /* ① 정적 씬 — 원경 구조물 + 먼 노면. 스윕 빔이 여기를 훑는다. */
@@ -4036,12 +4095,16 @@ export function usePointCloud(
       let aCar = alpha;
       let aRest = alpha;
       if (gN > 0) {
+        gCarPx = px;
         const gl = glyphRef.current;
         let eCar = 1;
         if (gl) {
           const mid = gOff + (gN >> 1);
           const eRaw = clamp01((hp - gl.d[mid]!) * gl.k[mid]!);
-          eCar = smooth(clamp01((eRaw - gl.hold[mid]!) * gl.mv[mid]!));
+          const eMid = smooth(clamp01((eRaw - gl.hold[mid]!) * gl.mv[mid]!));
+          // 차가 서는 시점도 **수렴**을 따른다 — 비행 중반에 차체가 차오르면
+          // 그것도 도착 전 유령이다.
+          eCar = smooth(clamp01((eMid - GLYPH_CONV) / (1 - GLYPH_CONV)));
         }
         aCar = Math.max(alpha, smooth(clamp01((eCar - 0.3) / 0.7)));
         /* 글자가 아닌 점은 글자가 **다 닿은 뒤에** 차오른다 — 차가 먼저 서 있으면
@@ -4395,10 +4458,12 @@ export function usePointCloud(
           if (a < 0.05) continue;
           const lx = gl.dx[i]! - scrollX;
           const ly = gl.dy[i]! - scrollY;
-          const k = e * 0.8;
-          const sx = lx + (ax - lx) * k;
+          // 자리를 못 얻은 점은 **모이지 않는다.** 제자리에서 풀어지다 스러진다.
+          const dr = gl.dr[i]!;
+          const hy = e > 0 ? gl.fy[i]! : ly;
+          const sx = lx + dr * GLYPH_DRIFT_X * e + (ax - lx) * e * 0.12;
           if (sx < -8 || sx > W + 8) continue;
-          const sy = ly + (ay - ly) * k;
+          const sy = hy + GLYPH_DRIFT_Y * e + (ay - hy) * e * 0.12;
           if (sy < -8 || sy > H + 8) continue;
           putInk(sx, sy, gl.b[i]!, a, (GLYPH_PS + 0.5) | 0);
         }
@@ -4874,6 +4939,8 @@ export function usePointCloud(
             raw: 0,
             move: 0,
             clipTop: 0,
+            ghost: 0,
+            swapped: 0,
             span: 0,
             t: [0, 0, 0],
             seated: 0,
@@ -4983,6 +5050,8 @@ export function usePointCloud(
         mo.raw = gl && gl.n ? rawSum / gl.n : 0;
         mo.move = moveN ? moveSum / moveN : 0;
         mo.clipTop = clipTop;
+        mo.ghost = moveN ? ghostN / moveN : 0;
+        mo.swapped = moveN ? swapN / moveN : 0;
         mo.span = st.hpSpan;
         if (gl) {
           const run = 1 / gl.tk;
