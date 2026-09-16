@@ -50,9 +50,6 @@ const { lang } = Astro.props;
 const t = (v: Parameters<typeof pick>[0]) => pick(v, lang);
 const fmt = (iso: string) => iso.replaceAll('-', '.');
 
-/** 분야 셈 — `01 / 04`. 배열이 늘면 분모도 따라 는다. */
-const ACT_TOTAL = String(RESEARCH.length).padStart(2, '0');
-
 /**
  * 홈에 싣는 최근 논문. 종류를 섞어 연도 내림차순으로만 정렬한다 — 홈에서는
  * 저널/학술대회 구분보다 "최근에 무엇을 냈는가"가 먼저다. 구분은 논문 페이지의 몫.
@@ -96,11 +93,11 @@ const RECRUIT_NOTE = RECRUIT.length > 1 ? RECRUIT[RECRUIT.length - 1] : '';
       <article class="area" data-act={i} id={`area-${a.id}`}>
         <span class="ghost" aria-hidden="true">{a.index}</span>
         <div class="areaText" data-quiet>
-          {/* 여기가 어디이고 넷 중 몇 번째인지를 이 한 줄이 말한다.
-              잘려 나가는 번호는 장식이라 읽으라고 둔 것이 아니다. */}
-          <p class="ann areaAnn">
-            {t(UI.sectionResearch)} <span class="areaIdx">{a.index} / {ACT_TOTAL}</span>
-          </p>
+          {/* 제목 위에 눈썹줄(`Research 01 / 04`)이 있었다. 제목 위의 작은 라벨은
+              **이 사이트의 톤과 무관하게** AI 가 만든 화면의 첫 번째 표식이고,
+              여기서는 알려 주는 것도 없었다 — 네 분야에는 순서가 없어서 번호가
+              정보를 나르지 않고, 분야 이름은 혼자서 제 무게를 진다. 지웠다.
+              화면 밖으로 잘려 나가는 큰 번호는 라벨이 아니라 구도라서 남긴다. */}
           <h2 class="areaName">{t(a.title)}</h2>
           <ul class="keys">
             {a.keywords.map((k) => <li>{k}</li>)}
@@ -232,7 +229,7 @@ const RECRUIT_NOTE = RECRUIT.length > 1 ? RECRUIT[RECRUIT.length - 1] : '';
     letter-spacing: -0.055em;
     color: var(--fg);
   }
-  .expand { margin: var(--space-2) 0 0; font-family: var(--font-mono); font-size: var(--t-mono-sm); letter-spacing: var(--track-mono); color: var(--accent); }
+  .expand { margin: var(--space-2) 0 0; font-family: var(--font-mono); font-size: var(--t-mono-sm); letter-spacing: var(--track-mono-read); color: var(--accent); }
   .open .claim { margin-block-start: var(--space-7); }
   .open .lede { margin-block-start: var(--space-3); }
   .claim {
@@ -286,7 +283,6 @@ const RECRUIT_NOTE = RECRUIT.length > 1 ? RECRUIT[RECRUIT.length - 1] : '';
   }
   .areaText { position: relative; padding-inline-start: var(--gutter); display: grid; gap: var(--space-3); }
   /* 넷 중 몇 번째인지가 이 줄에서 유일하게 바뀌는 값이다 — 사이를 한 칸 더 띄워 따로 읽힌다. */
-  .areaIdx { margin-inline-start: 0.9em; }
   .areaName {
     margin: 0;
     font-family: var(--font-sans);
@@ -312,7 +308,7 @@ const RECRUIT_NOTE = RECRUIT.length > 1 ? RECRUIT[RECRUIT.length - 1] : '';
     font-family: var(--font-mono);
     font-size: var(--t-micro);
     line-height: var(--lh-mono);
-    letter-spacing: var(--track-mono);
+    letter-spacing: var(--track-mono-read);
     color: var(--fg-mute);
   }
   .keys li { white-space: nowrap; }
@@ -407,7 +403,7 @@ const RECRUIT_NOTE = RECRUIT.length > 1 ? RECRUIT[RECRUIT.length - 1] : '';
   .join .claim { max-inline-size: 30ch; }
   /* 안내문과 주소는 한 덩어리다 — "아래의 메일"이 가리키는 것이 바로 아랫줄이다. */
   .reach { display: grid; gap: var(--space-3); }
-  .where { font-style: normal; font-family: var(--font-mono); font-size: var(--t-micro); line-height: var(--lh-mono); letter-spacing: var(--track-mono); color: var(--fg-mute); }
+  .where { font-style: normal; font-family: var(--font-mono); font-size: var(--t-micro); line-height: var(--lh-mono); letter-spacing: var(--track-mono-read); color: var(--fg-mute); }
   .where .off { color: var(--fg-dim); }
 
   /* ---- 좁은 화면 ------------------------------------------------------ */

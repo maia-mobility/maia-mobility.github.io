@@ -114,7 +114,7 @@ const items = NAV.filter((n) => n.key !== '');
     gap: var(--space-3);
     font-family: var(--font-mono);
     font-size: var(--t-micro);
-    letter-spacing: var(--track-mono);
+    letter-spacing: var(--track-mono-read);
     transition:
       opacity 220ms linear,
       translate 220ms ease;
@@ -220,7 +220,11 @@ const items = NAV.filter((n) => n.key !== '');
       flex-wrap: wrap;
       flex-basis: 100%;
       order: 1;
-      gap: var(--space-1) var(--space-3);
+      /* 항목 사이는 16px. 24px 이었을 때 영문 다섯 항목이 390px 에서 391px 이라
+         `News` 가 셋째 줄로 떨어졌고, 그 줄이 페이지 제목 위에 얹혔다(실측 24px
+         겹침). 16px 이면 359px — 한 줄이다. 320px 에서는 여전히 두 줄로 접히므로
+         각 페이지의 좁은 화면 상단 여백은 그 높이(약 100px)를 넘게 잡는다. */
+      gap: var(--space-1) var(--space-2);
     }
   }
 </style>

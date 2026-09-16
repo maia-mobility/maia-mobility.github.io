@@ -264,7 +264,7 @@ const CV = [
     position: relative;
     font-family: var(--font-mono);
     font-size: var(--t-mono-sm);
-    letter-spacing: var(--track-mono);
+    letter-spacing: var(--track-mono-read);
     color: var(--fg);
     text-decoration: none;
     border-block-end: var(--hair) solid var(--line);
@@ -447,7 +447,7 @@ const CV = [
     font-family: var(--font-mono);
     font-size: var(--t-mono-sm);
     font-weight: var(--w-mono-em);
-    letter-spacing: var(--track-mono);
+    letter-spacing: var(--track-mono-read);
     text-transform: uppercase;
     color: var(--fg-mute);
     text-decoration: none;
@@ -464,7 +464,8 @@ const CV = [
   /* ---- 좁은 화면 ------------------------------------------------------ */
   @media (max-width: 62rem) {
     .lead {
-      padding-block: var(--space-8) var(--space-5);
+      /* 위쪽 120px — 고정 색인이 좁은 화면에서 두세 줄로 접히면 바닥이 100px 까지 내려온다. 80px 이면 제목 위에 얹혔다(실측). */
+      padding-block: var(--space-9) var(--space-5);
     }
     /*
      * 신원 레일을 풀어 위로 올린다. 한 열에서 sticky 는 화면 절반을 사진에 내주고,

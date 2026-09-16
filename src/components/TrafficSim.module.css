@@ -253,8 +253,10 @@
   font-family: var(--font-mono);
   font-size: var(--t-micro);
   line-height: var(--lh-mono);
-  letter-spacing: var(--track-label);
-  text-transform: uppercase;
+  /* 구성 표기는 라벨이 아니라 **한 줄짜리 문장**이다(`22 VEH · RING 400 M ·
+     FOLLOWERSTOPPER AV × 0` — 44자). 그 길이를 전부 대문자로 세우면 낱말 윤곽이
+     사라져 한 글자씩 읽게 된다. 짧은 계측 라벨(`SPEED SPREAD`)은 대문자로 둔다. */
+  letter-spacing: var(--track-mono-read);
   color: var(--fg-dim);
   font-variant-numeric: tabular-nums;
 }

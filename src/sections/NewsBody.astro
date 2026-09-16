@@ -205,7 +205,8 @@ const YEARS = NEWS.reduce<{ year: string; items: typeof NEWS }[]>((acc, n) => {
   /* ---- 좁은 화면 ------------------------------------------------------ */
   @media (max-width: 48rem) {
     .lead {
-      padding-block: var(--space-8) var(--space-5);
+      /* 위쪽 120px — 고정 색인이 좁은 화면에서 두세 줄로 접히면 바닥이 100px 까지 내려온다. 80px 이면 제목 위에 얹혔다(실측). */
+      padding-block: var(--space-9) var(--space-5);
     }
     /*
      * 연도 칸(144px)이 390px 에서 가로의 절반 가까이를 먹는다. 한 열로 접고

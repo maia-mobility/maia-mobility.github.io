@@ -156,7 +156,8 @@ const t = (v: Parameters<typeof pick>[0]) => pick(v, lang);
       inline-size: 100%;
     }
     .page {
-      padding-block: var(--space-8) var(--space-7);
+      /* 위쪽 120px — 고정 색인이 좁은 화면에서 두세 줄로 접히면 바닥이 100px 까지 내려온다. 80px 이면 제목 위에 얹혔다(실측). */
+      padding-block: var(--space-9) var(--space-7);
     }
   }
 </style>

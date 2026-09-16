@@ -59,7 +59,7 @@
   font-family: var(--font-mono);
   font-size: var(--t-micro);
   line-height: var(--lh-mono);
-  letter-spacing: var(--track-mono);
+  letter-spacing: var(--track-mono-read);
   color: var(--fg-mute);
 }
 
@@ -86,7 +86,7 @@
   position: relative;
   font-family: var(--font-mono);
   font-size: var(--t-mono-sm);
-  letter-spacing: var(--track-mono);
+  letter-spacing: var(--track-mono-read);
   color: var(--fg);
   text-decoration: none;
   border-block-end: var(--hair) solid var(--line);
@@ -129,7 +129,7 @@
   gap: var(--space-1) var(--space-3);
   font-family: var(--font-mono);
   font-size: var(--t-micro);
-  letter-spacing: var(--track-mono);
+  letter-spacing: var(--track-mono-read);
 }
 
 .links a {
@@ -173,7 +173,7 @@
   font-family: var(--font-mono);
   font-size: var(--t-micro);
   line-height: var(--lh-mono);
-  letter-spacing: var(--track-mono);
+  letter-spacing: var(--track-mono-read);
   color: var(--fg-dim);
   font-variant-numeric: tabular-nums;
 }

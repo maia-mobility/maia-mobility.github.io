@@ -2,16 +2,15 @@
 /*
  * 강의 — 학기 적재 목록(manifest).
  *
- * 이 페이지는 데이터가 가장 적다(한 학기 · 세 과목). 목록을 촘촘한 로그 행으로
- * 짜면 화면의 10분의 1만 쓰고 끝나서, **번호를 크게 키워 자리를 벌었다.**
+ * 이 페이지는 데이터가 가장 적다(한 학기 · 세 과목).
  *
- *   · `01 02 03` 은 디스플레이 크기의 sans 다. 홈에서 화면 밖으로 잘려 나가던
- *     그 번호를 여기서는 **흐름 안에 세운다** — 자를 변이 없는 페이지라 잘라 봐야
- *     파편만 남는다. 번호가 행의 왼쪽 기둥이 되어 목록에 리듬을 준다.
+ *   · 왼쪽 기둥은 **학부/대학원 구분**이다. 한동안 `01 02 03` 이 거기 있었는데,
+ *     한 학기에 나란히 열리는 세 과목에는 순서가 없다 — 번호가 행에서 가장 큰
+ *     글자이면서 아무것도 알려 주지 않았다. 같은 자리에 구분 표기를 세우니
+ *     여백이 정보를 나르고, 오른쪽 끝에 홀로 떠 있던 꼬리표도 없어졌다.
+ *     논문의 연도 레일·소식의 날짜 레일과 같은 어휘다.
  *   · 학기가 이 페이지의 가장 큰 글이다. 과목 제목이 아니라 **언제**가 먼저다 —
  *     강의 목록은 시간표이고, 학기가 바뀌면 목록이 통째로 바뀐다.
- *   · 학부/대학원 구분은 오른쪽 여백에 모노로 선다. 테두리 친 칩으로 만들면
- *     세 줄에 작은 카드가 셋 생긴다.
  *
  * 글은 전부 `src/data/teaching.ts` 의 것이다.
  */
@@ -47,10 +46,10 @@ const TERMS = byTerm();
         </div>
 
         <ol class="manifest">
-          {g.courses.map((c, i) => (
+          {g.courses.map((c) => (
             <li>
-              <span class="no" aria-hidden="true">
-                {nn(i + 1)}
+              <span class="level">
+                {t(c.level === 'graduate' ? UI.graduate : UI.undergraduate)}
               </span>
 
               <div class="entry">
@@ -60,10 +59,6 @@ const TERMS = byTerm();
                   {c.note ? <span class="note">{t(c.note)}</span> : null}
                 </p>
               </div>
-
-              <span class="level">
-                {t(c.level === 'graduate' ? UI.graduate : UI.undergraduate)}
-              </span>
             </li>
           ))}
         </ol>
@@ -147,7 +142,7 @@ const TERMS = byTerm();
   }
   .manifest li {
     display: grid;
-    grid-template-columns: 4.5rem minmax(0, 1fr) auto;
+    grid-template-columns: 9rem minmax(0, 1fr);
     align-items: baseline;
     gap: var(--space-4);
     padding-block: var(--space-4);
@@ -161,16 +156,6 @@ const TERMS = byTerm();
    * 굵기를 가장 얇게, 광도는 헤어라인 한 단계 위로. 읽으라고 둔 것이 아니라
    * 행의 무게를 잡으라고 둔 것이다.
    */
-  .no {
-    font-family: var(--font-sans);
-    font-size: clamp(1.8rem, 1.1rem + 2.4vw, 3rem);
-    font-weight: var(--w-thin);
-    line-height: 0.9;
-    letter-spacing: -0.04em;
-    color: var(--line-hot);
-    font-variant-numeric: tabular-nums;
-    user-select: none;
-  }
 
   .entry {
     display: grid;
@@ -209,7 +194,7 @@ const TERMS = byTerm();
 
   /* 학부/대학원 — 오른쪽 여백의 모노 표기. 칩이 아니다. */
   .level {
-    justify-self: end;
+    justify-self: start;
     font-family: var(--font-mono);
     font-size: var(--t-micro);
     line-height: var(--lh-mono);
@@ -231,21 +216,18 @@ const TERMS = byTerm();
   /* ---- 좁은 화면 ------------------------------------------------------ */
   @media (max-width: 48rem) {
     .lead {
-      padding-block: var(--space-8) var(--space-6);
+      /* 위쪽 120px — 고정 색인이 좁은 화면에서 두세 줄로 접히면 바닥이 100px 까지 내려온다. 80px 이면 제목 위에 얹혔다(실측). */
+      padding-block: var(--space-9) var(--space-6);
     }
     /*
      * 세 칸을 두 칸으로 줄인다 — 번호 칸은 남기고(행의 뼈대다) 구분 표기만
      * 본문 아래로 내린다. 390px 에서 세 칸이면 제목이 한 줄에 22자였다.
      */
     .manifest li {
-      grid-template-columns: 3rem minmax(0, 1fr);
-      /* 행 간격은 좁게 — 구분 표기는 본문에 딸린 꼬리표이지 다음 덩이가 아니다. */
-      gap: var(--space-1) var(--space-3);
+      /* 좁은 화면에서는 기둥을 접고 구분 표기를 제목 위에 올린다. */
+      grid-template-columns: minmax(0, 1fr);
+      gap: var(--space-1);
       padding-block: var(--space-3);
-    }
-    .level {
-      grid-column: 2;
-      justify-self: start;
     }
     .term {
       gap: var(--space-4);

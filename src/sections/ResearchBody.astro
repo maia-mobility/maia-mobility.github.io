@@ -107,7 +107,7 @@ const TOTAL = String(RESEARCH.length).padStart(2, '0');
     font-family: var(--font-mono);
     font-size: var(--t-micro);
     line-height: var(--lh-mono);
-    letter-spacing: var(--track-mono);
+    letter-spacing: var(--track-mono-read);
     color: var(--fg-mute);
   }
 
@@ -257,7 +257,8 @@ const TOTAL = String(RESEARCH.length).padStart(2, '0');
       grid-template-columns: minmax(0, 1fr);
       align-items: start;
       gap: var(--space-5);
-      padding-block: var(--space-8) var(--space-6);
+      /* 위쪽 120px — 고정 색인이 좁은 화면에서 두세 줄로 접히면 바닥이 100px 까지 내려온다. 80px 이면 제목 위에 얹혔다(실측). */
+      padding-block: var(--space-9) var(--space-6);
     }
     .act {
       gap: var(--space-4);
