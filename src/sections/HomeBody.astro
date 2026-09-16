@@ -81,14 +81,21 @@ const RECRUIT_NOTE = RECRUIT.length > 1 ? RECRUIT[RECRUIT.length - 1] : '';
       스크롤을 내리면 점으로 풀려 배경 도로의 차체 점군에 자리 잡는다. 값은 어느
       차가 받는가다: `lane` = 우리 차로의 앞차 대열, `next` = 옆 차로.
       이름이 가장 크니 이름이 우리가 끝까지 따라가는 차들이 된다. */}
-  <section class="open" data-quiet>
-    <h1 class="wordmark" data-ink="lane">{SITE.short}</h1>
-    <p class="expand" data-ink="next">{t(SITE.expansion)}</p>
-    <p class="claim" data-ink="next">{t(SITE.tagline)}</p>
-    <p class="lede" data-ink="next">{t(SITE.hero)}</p>
-    <p class="ann aff" data-ink="next">
-      {AFFIL.map((part, i) => <span>{i < AFFIL.length - 1 ? `${part},` : part}</span>)}
-    </p>
+  <section class="open">
+    {/* 이 상자는 **첫 화면에 붙어 있다**(sticky). 글자가 화면 위로 올라가다 점이
+        되는 것이 아니라 **보이던 그 자리에서** 점이 되어야 하기 때문이다.
+        `data-quiet="ink"` 는 그 자리의 도로를 낮추되, 글자가 점으로 바뀌는 만큼
+        같이 풀리라는 표식이다 — 안 그러면 글자가 사라진 뒤로도 도로 왼쪽이
+        계속 어둡다. */}
+    <div class="openStick" data-quiet="ink">
+      <h1 class="wordmark" data-ink="lane">{SITE.short}</h1>
+      <p class="expand" data-ink="next">{t(SITE.expansion)}</p>
+      <p class="claim" data-ink="next">{t(SITE.tagline)}</p>
+      <p class="lede" data-ink="next">{t(SITE.hero)}</p>
+      <p class="ann aff" data-ink="next">
+        {AFFIL.map((part, i) => <span>{i < AFFIL.length - 1 ? `${part},` : part}</span>)}
+      </p>
+    </div>
   </section>
 
   {/* ② 연구 — 한 분야가 한 화면. 시뮬레이션이 돌고, 배경 도로도 그 분야로 간다. */}
@@ -230,14 +237,22 @@ const RECRUIT_NOTE = RECRUIT.length > 1 ? RECRUIT[RECRUIT.length - 1] : '';
    * 그대로다** — 첫 화면의 글 위치가 1px 도 움직이지 않는다(hero:check 기준).
    */
   .open {
-    --open-run: 45dvh;
+    /* 연출이 도는 동안 첫 화면이 붙어 있을 거리. 치환 150 + 비행 300 = 450px 를
+       **세로가 짧은 창에서도** 덮어야 하므로 비율과 절대값 중 큰 쪽을 쓴다
+       (468px 창에서 62dvh 는 290px 뿐이다). */
+    --open-run: max(62dvh, 34rem);
     min-block-size: calc(100dvh + var(--open-run));
+    inline-size: min(46rem, 54%);
+  }
+  /* 콘텐츠 상자는 예전 `.open` 그대로다 — 첫 화면의 글이 1px 도 움직이지 않는다. */
+  .openStick {
+    position: sticky;
+    inset-block-start: 0;
+    block-size: 100dvh;
     display: grid;
     align-content: center;
     justify-items: start;
     padding: var(--space-9) var(--gutter);
-    padding-block-end: calc(var(--space-9) + var(--open-run));
-    inline-size: min(46rem, 54%);
   }
   /* 이름이 가장 크다. 연구실 사이트에서 가장 먼저 읽혀야 하는 것이라서. */
   .wordmark {
@@ -512,10 +527,13 @@ const RECRUIT_NOTE = RECRUIT.length > 1 ? RECRUIT[RECRUIT.length - 1] : '';
      * `svh` 를 쓰는 이유: 주소창이 보이는 상태의 높이라 어떤 경우에도 넘치지 않는다.
      */
     .open {
-      --open-run: 45svh;
+      --open-run: max(62svh, 34rem);
       inline-size: 100%;
       min-block-size: calc(100svh + var(--open-run));
-      padding-block: var(--space-9) calc(var(--space-8) + var(--open-run));
+    }
+    .openStick {
+      block-size: 100svh;
+      padding-block: var(--space-9) var(--space-8);
     }
     /* 닫는 문장만 선 아래 여백이 한 칸 넓다(40 → 64px). 다른 구역은 선 바로 밑에
        10px 짜리 모노 라벨이 오지만 여기는 이 페이지에서 가장 큰 문장이 온다 —

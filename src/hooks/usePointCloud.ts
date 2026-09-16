@@ -1636,6 +1636,8 @@ interface QuietEl {
   /** [x, y, w, h] × n (요소 기준) */
   box: Float64Array;
   n: number;
+  /** 첫 화면의 글 상자인가 — 글자가 점이 되는 만큼 감쇠가 풀린다 */
+  ink: boolean;
 }
 
 /** 글줄 상자 수집용 스크래치. 요소 하나를 잴 때만 쓰고 바로 비운다. */
@@ -1809,6 +1811,11 @@ const GLYPH_INK = 0.3;
  */
 const GLYPH_HOLD_PX = 150;
 /**
+ * 치환이 시작되는 스크롤(px). 첫 화면이 **붙어 있는** 동안 도는 연출이라 글자
+ * 위치와 무관하다 — 손가락을 한 번 굴리면 바로 시작한다.
+ */
+const GLYPH_START_PX = 16;
+/**
  * **비행 구간의 길이(스크롤 px).** 점-글자가 풀려 차에 닿기까지. 트랙패드로 한 번,
  * 휠로 서너 칸이다 — 치환 66 + 비행 110px 이었을 때 "전환이 너무 빠르다"였다.
  */
@@ -1863,7 +1870,11 @@ const GLYPH_DZ_MAX = 95;
 /** 글자에서 뜯어낸 점군. 좌표는 **문서 좌표**다 — 글은 스크롤과 함께 올라간다. */
 interface Glyphs {
   n: number;
-  /** 문서 좌표(px) */
+  /**
+   * **붙어 있는 첫 화면 상자 기준 좌표(px).** 문서 좌표가 아니다 — 여는 화면은
+   * sticky 라 스크롤해도 화면에서 움직이지 않는다. 그리기 직전에 그 상자의
+   * 화면 위치(`st.inkLeft`·`st.inkTop`)를 더하면 화면 좌표가 된다.
+   */
   dx: Float32Array;
   dy: Float32Array;
   /** 알파(획 피복률에서) */
@@ -1882,12 +1893,6 @@ interface Glyphs {
   sw: Float32Array;
   /** 수렴 전 드리프트 방향·세기 −1…1 */
   dr: Float32Array;
-  /**
-   * **비행이 시작되는 순간의 화면 y.** 글자에서 풀린 점은 그 자리에서 문서를 떠나
-   * 센서의 화면에 머문다 — 문서 좌표를 계속 따르면 글자와 함께 화면 위끝으로
-   * 밀려 나가 버린다(실측: 스크롤 350px 에서 점의 39%가 잘려 사라졌다).
-   */
-  fy: Float32Array;
   /** 우리 차로 대열이 받을 구간 [시작, 개수] */
   laneOff: number;
   laneN: number;
@@ -1942,7 +1947,13 @@ function thinRows(rows: number[][], keep: number): number[][] {
  * @param vh   `hp` 를 만드는 기준 높이(= innerHeight × 0.85)
  * @param cap  점 상한
  */
-function bakeGlyphs(vh: number, cap: number, mobile: boolean): Glyphs | null {
+function bakeGlyphs(
+  vh: number,
+  cap: number,
+  mobile: boolean,
+  rootLeft: number,
+  rootTop: number,
+): Glyphs | null {
   const els = [...document.querySelectorAll<HTMLElement>('[data-ink]')];
   if (!els.length) return null;
 
@@ -1961,8 +1972,6 @@ function bakeGlyphs(vh: number, cap: number, mobile: boolean): Glyphs | null {
   const g = off.getContext('2d', { willReadFrequently: true });
   if (!g) return null;
 
-  const sx = window.scrollX;
-  const sy = window.scrollY;
   /* 모바일은 성기게 — 다만 1.7배로 벌렸더니 워드마크가 74점밖에 안 돼서 글자가
      풀리는 것이 아니라 점 몇 개가 흩어지는 것으로 보였다. 1.2배가 상한(900점)
      안에 들어오면서 형태가 남는 지점이다. */
@@ -1974,8 +1983,6 @@ function bakeGlyphs(vh: number, cap: number, mobile: boolean): Glyphs | null {
   const colors: RGB[] = [];
   /** 글자 요소들. **읽기가 다 끝난 뒤에** 한꺼번에 일정을 써 준다. */
   const sched: HTMLElement[] = [];
-  /** 가장 위에 있는 글자의 문서 y — 치환이 끝나야 하는 시점을 이 글자가 정한다. */
-  let anchorY = Number.POSITIVE_INFINITY;
 
   for (const el of els) {
     const group = el.dataset.ink === 'lane' ? 'lane' : 'next';
@@ -2010,7 +2017,6 @@ function bakeGlyphs(vh: number, cap: number, mobile: boolean): Glyphs | null {
 
     // 일정은 전 요소가 하나다(아래 §한 번에). 여기서는 요소만 모아 둔다.
     sched.push(el);
-    anchorY = Math.min(anchorY, box.top + sy);
 
     const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
     const dst = bag[group]!;
@@ -2047,7 +2053,12 @@ function bakeGlyphs(vh: number, cap: number, mobile: boolean): Glyphs | null {
           for (let px = ox; px < bw; px += step) {
             const cov = data[((row + (px | 0)) << 2) + 3]! / 255;
             if (cov < GLYPH_INK) continue;
-            dst.push([x0 + px + sx, y0 + py + sy, Math.min(1, 0.42 + cov * 0.62), bucket]);
+            dst.push([
+              x0 + px - rootLeft,
+              y0 + py - rootTop,
+              Math.min(1, 0.42 + cov * 0.62),
+              bucket,
+            ]);
           }
         }
       }
@@ -2060,16 +2071,17 @@ function bakeGlyphs(vh: number, cap: number, mobile: boolean): Glyphs | null {
      지금은 전부 같은 hp 에 치환을 시작해 같은 hp 에 끝내고, 같은 hp 에 도착한다.
      화면 전체의 글이 **한 덩어리로** 점이 되었다가 위에서부터 풀린다.
 
-     끝나는 시점은 **가장 위에 있는 글자**(워드마크)가 정한다. 그 글자의 위끝이
-     화면 위끝에 닿기 전에 치환이 끝나야 점-글자를 볼 수 있다. 나머지 글은 그때
-     아직 화면 안이라, 점으로 선 채로 남아 있다가 같이 풀린다.
+     일정은 **글자 위치와 무관하다.** 예전에는 "워드마크 위끝이 화면 위끝에 닿는
+     순간"을 치환의 끝으로 삼았는데, 그러면 ① 글자가 **위로 올라가다** 점이 되고
+     ② 세로가 짧은 창에서는 그 순간이 너무 일러(1377×468 에서 96px) 치환 구간을
+     앞에 둘 자리가 없어 일정이 눌렸다. 지금은 첫 화면이 sticky 로 **붙어 있어**
+     글자가 움직이지 않으므로 스크롤 px 만으로 정한다.
 
-     길이는 **비율이 아니라 스크롤 px** 로 정한다(`GLYPH_HOLD_PX`·`GLYPH_FLY_PX`).
-     비율로 잡으면 여는 화면 길이를 바꿀 때마다 체감 속도가 같이 변한다. */
-  const holdHp = GLYPH_HOLD_PX / vh;
-  const tHold = Number.isFinite(anchorY) ? anchorY / vh : holdHp;
-  const startHp = Math.max(0.004, tHold - holdHp);
-  const arrive = Math.min(GLYPH_END, tHold + GLYPH_FLY_PX / vh);
+     길이는 **비율이 아니라 스크롤 px** 다(`GLYPH_START_PX`·`GLYPH_HOLD_PX`·
+     `GLYPH_FLY_PX`). 비율로 잡으면 창 크기마다 체감 속도가 달라진다. */
+  const startHp = GLYPH_START_PX / vh;
+  const tHold = (GLYPH_START_PX + GLYPH_HOLD_PX) / vh;
+  const arrive = Math.min(GLYPH_END, (GLYPH_START_PX + GLYPH_HOLD_PX + GLYPH_FLY_PX) / vh);
   const run = Math.max(0.02, arrive - startHp);
   const hold = Math.min(0.9, Math.max(0.05, (tHold - startHp) / run));
 
@@ -2117,7 +2129,6 @@ function bakeGlyphs(vh: number, cap: number, mobile: boolean): Glyphs | null {
     hold: new Float32Array(n),
     mv: new Float32Array(n),
     dr: new Float32Array(n),
-    fy: new Float32Array(n),
     sw: new Float32Array(n),
     laneOff: 0,
     laneN: lane.length,
@@ -2149,8 +2160,6 @@ function bakeGlyphs(vh: number, cap: number, mobile: boolean): Glyphs | null {
        거의 닿아서 바뀌어야 **글자가 차가 된 것**으로 읽힌다. */
     out.sw[i] = 0.55 + rnd() * 0.3;
     out.dr[i] = rnd() * 2 - 1;
-    // 비행이 시작되는 hp = d + hold/k. 그 순간의 스크롤을 빼 두면 화면 y 가 된다.
-    out.fy[i] = p[1]! - (startHp + (hold + lag) * run) * vh;
   }
   return out;
 }
@@ -2550,6 +2559,9 @@ interface LoopState {
   /** `hp` 의 자(px) — 여는 화면의 실제 길이. 달라지면 글자 일정을 다시 굽는다 */
   hpSpan: number;
   glyphSpan: number;
+  /** 붙어 있는 첫 화면 상자의 화면 위치 — 글자 점 좌표의 원점. NaN = 아직 모름 */
+  inkLeft: number;
+  inkTop: number;
   /** 마지막으로 CSS 변수에 흘려보낸 값 — 안 바뀌면 DOM 을 건드리지 않는다 */
   cssH: number;
   cssP: number;
@@ -2680,6 +2692,8 @@ export function usePointCloud(
     glyphH: -1,
     hpSpan: 1,
     glyphSpan: -1,
+    inkLeft: Number.NaN,
+    inkTop: Number.NaN,
     cssH: Number.NaN,
     cssP: Number.NaN,
     cssV: -1,
@@ -2890,8 +2904,6 @@ export function usePointCloud(
        스크롤은 오직 여기, rAF 안에서만 읽는다. scroll 리스너도 setState 도 없다.
        문서 전체가 주행 구간이다 — 히어로부터 푸터의 주소까지.             */
     const scrollY = still ? 0 : window.scrollY || window.pageYOffset || 0;
-    /** 글자 점은 문서 좌표로 굽는다 — 화면 좌표로 되돌릴 때 가로도 같이 뺀다. */
-    const scrollX = still ? 0 : window.scrollX || 0;
 
     // 문서 높이는 매 프레임 재지 않는다(레이아웃 강제). 0.3초마다 갱신하면 충분하다.
     if (st.docAt < 0 || elapsed - st.docAt > 0.3) {
@@ -2917,6 +2929,10 @@ export function usePointCloud(
         el,
         floor: el.getAttribute('data-quiet') === 'panel' ? QUIET_DEEP : QUIET_FLOOR,
         soft: el.getAttribute('data-quiet') === 'panel' ? QUIET_SOFT_PANEL : QUIET_SOFT,
+        /* 첫 화면의 글 상자. 글이 점으로 바뀌는 만큼 감쇠가 **풀린다** — 붙어 있는
+           상자라 글이 사라진 뒤에도 자리는 그대로여서, 안 풀면 도로 왼쪽이 연출
+           내내 어둡다. 글자 점의 화면 좌표도 이 상자에서 나온다. */
+        ink: el.getAttribute('data-quiet') === 'ink',
         bw: Number.NaN,
         bh: Number.NaN,
         at: -1,
@@ -3021,6 +3037,19 @@ export function usePointCloud(
        가독성 장치다(애니메이션이 도는 쪽에서 쓰는 것과 같은 장치이기도 하다).
        다시 굽는 계기는 rAF 루프가 아니라 **스크롤 리스너 → rAF 한 번**이다
        (아래 §정지 프레임 다시 그리기). */
+    /**
+     * 첫 화면의 글이 **자리를 비운 정도** 0→1.
+     *
+     * DOM 글자가 꺼지는 시점(치환)이 아니라 **점이 날아가는 정도**를 쓴다. 치환이
+     * 끝나도 점-글자는 그 자리에 그대로 서 있으므로, 그때 감쇠를 놓아 버리면
+     * 점-글자가 밝아진 도로 위에 얹혀 읽히지 않는다. 점이 떠나는 만큼 도로가
+     * 돌아온다 — 글이 가렸던 자리가 글과 함께 열린다.
+     */
+    const gIn = glyphRef.current;
+    const inkGone =
+      still || !gIn
+        ? 0
+        : smooth(clamp01((clamp01((hp - gIn.t0) * gIn.tk) - gIn.h0) * gIn.m0));
     {
       const q = buf.quiet;
       q.fill(1);
@@ -3039,6 +3068,13 @@ export function usePointCloud(
           // 가로 덱에서 옆으로 밀려난 패널은 화면 밖이다 — 세로만 보면 헛돈다.
           if (r.right < -softMax || r.left > W + softMax) continue;
           seen++;
+          if (qe.ink) {
+            /* 붙어 있는 첫 화면 상자의 화면 위치. 글자 점은 이 상자 기준으로
+               구워 두었으므로 여기만 더하면 화면 좌표가 된다 — rect 는 여기서
+               한 번 읽는 것이 전부다(프레임에 DOM 읽기를 더하지 않는다). */
+            st.inkLeft = r.left;
+            st.inkTop = r.top;
+          }
           /* 글줄을 다시 재는 때: 아직 안 쟀거나, 요소 크기가 달라졌거나(재조판),
              sticky 자식이 움직일 만큼 시간이 지났을 때. **한 프레임에 한 요소만** —
              여러 요소를 한꺼번에 재면 그 프레임만 길어진다. */
@@ -3054,7 +3090,10 @@ export function usePointCloud(
             inkBoxes(qe.el, qe, r);
           }
           const box = qe.box;
-          const floor = qe.floor;
+          /* 글이 점으로 바뀐 만큼 감쇠를 **놓아 준다.** 첫 화면은 붙어 있어 글이
+             사라진 뒤에도 상자가 그 자리에 남는다 — 안 놓으면 연출 내내 도로
+             왼쪽이 어둡고, 글자에서 온 점들이 어두운 자리로 내려앉는다. */
+          const floor = qe.ink ? qe.floor + (1 - qe.floor) * inkGone : qe.floor;
           const span = 1 - floor;
           const soft = shortSide * qe.soft;
           const inv = 1 / soft;
@@ -3097,14 +3136,25 @@ export function usePointCloud(
 
        동작 줄이기에서는 아예 굽지 않는다 — `hp` 가 0 이라 글자는 제자리에 서
        있고, 연출이 돌지 않으므로 점군도 필요 없다. */
-    if ((st.glyphStale || Math.abs(st.hpSpan - st.glyphSpan) > 2) && !still) {
+    // 첫 화면 상자의 자리를 아직 못 읽었으면 굽지 않는다 — 좌표의 원점이 없다.
+    if (
+      (st.glyphStale || Math.abs(st.hpSpan - st.glyphSpan) > 2) &&
+      !still &&
+      Number.isFinite(st.inkTop)
+    ) {
       st.glyphStale = false;
       st.glyphW = W;
       st.glyphH = H;
       // 일정은 `hp` 의 자에 걸려 있다 — 자가 달라지면(무대 위치가 잡히는 첫
       // 프레임·재조판) 구간 길이가 통째로 달라지므로 다시 굽는다.
       st.glyphSpan = st.hpSpan;
-      const baked = bakeGlyphs(st.hpSpan, mobile ? GLYPH_MAX_MOBILE : GLYPH_MAX, mobile);
+      const baked = bakeGlyphs(
+        st.hpSpan,
+        mobile ? GLYPH_MAX_MOBILE : GLYPH_MAX,
+        mobile,
+        st.inkLeft,
+        st.inkTop,
+      );
       glyphRef.current = baked;
       if (baked && baked.colors.length) setGlyphColors(pal, baked.colors);
       slotRef.current.ordered = false;
@@ -3834,23 +3884,33 @@ export function usePointCloud(
          언제 닿는가의 시계이고, `c` 는 실제로 차 쪽으로 간 정도다. 위치·색·포그·
          감쇠·크기가 전부 `c` 를 따른다. */
       const c = smooth(clamp01((e - GLYPH_CONV) / (1 - GLYPH_CONV)));
-      const lx = gl.dx[i]! - scrollX;
-      const ly = gl.dy[i]! - scrollY;
+      const lx = st.inkLeft + gl.dx[i]!;
+      const ly = st.inkTop + gl.dy[i]!;
       const inv = f / dz;
       const tx = cx + (x - camX) * inv;
       const ty = cy + (camY - y) * inv + (tx - cx) * roll;
+      /* **다 닿았으면 그냥 차체 점이다.** `emit` 에 그대로 넘긴다 — `c = 1` 을
+         보간식에 통과시키면 `b + (t − b)·1` 이 부동소수 1 ULP 만큼 `t` 와 달라져
+         점 일부가 1px 씩 어긋난다(인계 프레임의 픽셀 변화가 이웃의 1.33% 대
+         1.77% 로 벌어졌다). 값이 같아야 할 자리는 **같은 식**으로 낸다.
+         LOD 밖의 자리는 여기서 사라진다 — 인계 뒤에는 없는 점이다. */
+      if (c >= 1) {
+        if (spare) return;
+        moveSum += Math.abs(tx - lx) + Math.abs(ty - ly);
+        moveN++;
+        ghostN++;
+        swapN++;
+        emit(x, y, dz, b, alpha, size, true);
+        return;
+      }
       /* 수렴 전에는 **자기 자리에서** 풀어진다 — 가로로 조금 벌어지고 아래로
          처진다. 목표 쪽으로 가는 것이 아니라 글자가 흐트러지는 것이다. */
       const drift = (1 - c) * e;
       const dr = gl.dr[i]!;
-      /* 풀린 점은 **문서를 떠나 화면에 머문다.** 글자 자리를 계속 따르면 글자와
-         함께 화면 위끝으로 밀려 나간다 — 도로로 들어가는 것이 아니라 위로
-         사라지는 것이 된다(실측: 스크롤 350px 에서 39%가 잘렸다). 치환 중(e = 0)
-         에는 글자에 붙어 있어야 하므로 그때만 문서 좌표를 쓴다. 두 값은 비행이
-         시작되는 순간 정확히 같아서 이어지는 자리에 틈이 없다. */
-      const hy = e > 0 ? gl.fy[i]! : ly;
+      /* 글자 자리는 **화면에 고정**이다 — 여는 화면이 sticky 라 스크롤해도
+         움직이지 않는다. 그래서 점도 올라가지 않고 제자리에서 풀어진다. */
       const bx = lx + dr * GLYPH_DRIFT_X * drift;
-      const by = hy + (0.45 + 0.55 * (dr < 0 ? -dr : dr)) * GLYPH_DRIFT_Y * drift;
+      const by = ly + (0.45 + 0.55 * (dr < 0 ? -dr : dr)) * GLYPH_DRIFT_Y * drift;
       const sx = bx + (tx - bx) * c;
       if (sx < -8 || sx > W + 8) return;
       // 약하게 처진다. 직선으로 이으면 글자에서 차까지가 **하늘을 가로지르는 선**
@@ -4456,14 +4516,13 @@ export function usePointCloud(
           const a =
             gl.a[i]! * clamp01(eRaw / (gl.hold[i]! * GLYPH_IN)) * (1 - smooth(e / GLYPH_LOST));
           if (a < 0.05) continue;
-          const lx = gl.dx[i]! - scrollX;
-          const ly = gl.dy[i]! - scrollY;
+          const lx = st.inkLeft + gl.dx[i]!;
+          const ly = st.inkTop + gl.dy[i]!;
           // 자리를 못 얻은 점은 **모이지 않는다.** 제자리에서 풀어지다 스러진다.
           const dr = gl.dr[i]!;
-          const hy = e > 0 ? gl.fy[i]! : ly;
           const sx = lx + dr * GLYPH_DRIFT_X * e + (ax - lx) * e * 0.12;
           if (sx < -8 || sx > W + 8) continue;
-          const sy = hy + GLYPH_DRIFT_Y * e + (ay - hy) * e * 0.12;
+          const sy = ly + GLYPH_DRIFT_Y * e + (ay - ly) * e * 0.12;
           if (sy < -8 || sy > H + 8) continue;
           putInk(sx, sy, gl.b[i]!, a, (GLYPH_PS + 0.5) | 0);
         }
