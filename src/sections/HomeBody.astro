@@ -215,12 +215,28 @@ const RECRUIT_NOTE = RECRUIT.length > 1 ? RECRUIT[RECRUIT.length - 1] : '';
    * 딸린 글인지가 사라진다. 확장명은 워드마크의 캡션이라 바짝 붙이고, 태그라인
    * 앞에서만 크게 쉰다 — 이 한 번의 숨이 여는 화면의 뼈대다.
    */
+  /*
+   * **글은 첫 화면 가운데에 그대로 있고, 그 아래로 여유가 붙는다.**
+   *
+   * 그 여유가 연출의 길이다. 배경의 `hp`(글자→차 진행도)는 연구 무대 상단의
+   * 문서 좌표를 자로 쓰므로(usePointCloud §히어로 카피 퇴장 진행도), 여는 화면을
+   * 늘린 만큼 글자가 점이 되어 차로 가는 데 쓰는 스크롤이 늘어난다. 100dvh 였을
+   * 때는 전환이 175px 만에 끝나 "스크롤 한 번에 지나간다"였다.
+   *
+   * 여유는 빈 화면이 아니다 — 그 구간에서 점-글자가 풀려 날아가고, 도착한 뒤에는
+   * 글자로 만들어진 차들이 실제로 달리는 것을 본다(도착 ≈485px, 무대 진입 ≈1,250px).
+   *
+   * 아래 여백을 늘리면서 `min-block-size` 를 같은 만큼 늘리므로 **콘텐츠 상자는
+   * 그대로다** — 첫 화면의 글 위치가 1px 도 움직이지 않는다(hero:check 기준).
+   */
   .open {
-    min-block-size: 100dvh;
+    --open-run: 45dvh;
+    min-block-size: calc(100dvh + var(--open-run));
     display: grid;
     align-content: center;
     justify-items: start;
     padding: var(--space-9) var(--gutter);
+    padding-block-end: calc(var(--space-9) + var(--open-run));
     inline-size: min(46rem, 54%);
   }
   /* 이름이 가장 크다. 연구실 사이트에서 가장 먼저 읽혀야 하는 것이라서. */
@@ -496,9 +512,10 @@ const RECRUIT_NOTE = RECRUIT.length > 1 ? RECRUIT[RECRUIT.length - 1] : '';
      * `svh` 를 쓰는 이유: 주소창이 보이는 상태의 높이라 어떤 경우에도 넘치지 않는다.
      */
     .open {
+      --open-run: 45svh;
       inline-size: 100%;
-      min-block-size: 100svh;
-      padding-block: var(--space-9) var(--space-8);
+      min-block-size: calc(100svh + var(--open-run));
+      padding-block: var(--space-9) calc(var(--space-8) + var(--open-run));
     }
     /* 닫는 문장만 선 아래 여백이 한 칸 넓다(40 → 64px). 다른 구역은 선 바로 밑에
        10px 짜리 모노 라벨이 오지만 여기는 이 페이지에서 가장 큰 문장이 온다 —

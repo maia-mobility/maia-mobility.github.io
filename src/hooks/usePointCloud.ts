@@ -1773,8 +1773,8 @@ function inkBoxes(el: Element, q: QuietEl, r: DOMRect): void {
  * 구웠더니 675점이 자리를 못 얻고 흩어졌고, 그러면 "글자가 차가 된다"가 아니라
  * "글자의 4분의 1이 사라진다"가 된다.
  */
-const GLYPH_MAX = 2000;
-const GLYPH_MAX_MOBILE = 900;
+const GLYPH_MAX = 4200;
+const GLYPH_MAX_MOBILE = 1800;
 /**
  * 우리 차로 대열이 받는 몫. 워드마크(MAIA)가 여기로 가고 나머지 글은 옆 차로다.
  * 대열은 5대뿐이라 몫을 더 주면 받을 자리가 없어 그대로 흩어져 사라진다.
@@ -1791,43 +1791,33 @@ const GLYPH_LANE_SHARE = 0.45;
  * 아래끝(3.2px)은 16px 본문 한 글자에 점 6개가 남는 선이다: 더 벌리면 한 줄이
  * 풀리는 것이 아니라 점 몇 개가 흩어지는 것으로 보인다.
  */
-const GLYPH_STEP = 4.8;
-const GLYPH_STEP_MIN = 3.2;
+const GLYPH_STEP = 3.8;
+const GLYPH_STEP_MIN = 2.4;
 /** 획으로 치는 픽셀 피복률 문턱. 이보다 옅으면 안티에일리어싱 가장자리다. */
 const GLYPH_INK = 0.3;
 /**
- * **치환 구간** — 요소의 진행 구간 중 점이 **글자 픽셀 위에 그대로 서 있는** 몫.
+ * **치환 구간의 길이(스크롤 px)** — 점이 **글자 픽셀 위에 그대로 서 있는** 구간.
  *
  * 이 구간이 없으면 글자가 옅어지는 것과 점이 날아가는 것이 동시에 일어나서,
  * 화면 어디에도 "글자 모양이 점으로 서 있는 순간"이 없다 — 글자가 점이 된 것이
- * 아니라 **글자 옆에서 점이 나온 것**으로 보인다(교수님 지적). 이 구간의 끝에서는
- * 화면에 **점으로 찍힌 MAIA** 가 서 있고 DOM 글자는 정확히 0 이다.
- * 점마다의 시차는 여기에 없다 — 글자가 통째로 점이 된다.
+ * 아니라 **글자 옆에서 점이 나온 것**으로 보인다(교수님 지적). 구간의 끝에서는
+ * 화면에 **점으로 찍힌 첫 화면**이 서 있고 DOM 글자는 정확히 0 이다.
+ * 점마다의 시차는 여기에 없다 — 글이 통째로 점이 된다.
+ *
+ * **비율이 아니라 px 다.** 휠 한 칸이 100px 남짓이니 150px 이면 한두 칸이다.
+ * 비율로 두면 여는 화면 길이를 바꿀 때마다 체감 속도가 같이 변한다.
  */
-const GLYPH_HOLD = 0.35;
+const GLYPH_HOLD_PX = 150;
 /**
- * 치환 구간의 **최소 스크롤 길이(px)**. 비율만으로 잡으면 짧은 창에서 무너진다 —
- * 여는 화면이 낮으면 워드마크 위에 남은 여유가 없어(문서 y 185px 에서 시작한다)
- * 구간이 통째로 줄고, 1280×700 에서는 50px 까지 떨어졌다. 글자가 점이 되는 것을
- * 알아채려면 손가락 한 번 굴리는 거리는 있어야 한다.
+ * **비행 구간의 길이(스크롤 px).** 점-글자가 풀려 차에 닿기까지. 트랙패드로 한 번,
+ * 휠로 서너 칸이다 — 치환 66 + 비행 110px 이었을 때 "전환이 너무 빠르다"였다.
  */
-const GLYPH_HOLD_PX = 66;
-/** 치환이 전체의 절반을 넘지 않게 — 넘으면 비행이 급해진다. */
-const GLYPH_HOLD_MAX = 0.52;
+const GLYPH_FLY_PX = 300;
 /**
  * 이산 구간 안의 시차 — 점-글자가 **위에서부터** 풀린다(남은 구간 대비 비율).
- * 치환 구간에는 걸리지 않는다.
+ * 치환 구간에는 걸리지 않고, 기준은 요소가 아니라 **첫 화면 전체의 세로 위치**다.
  */
 const GLYPH_STAGGER = 0.34;
-/**
- * 한 요소가 쓰는 전체 진행도(hp). 앞 `GLYPH_HOLD` 가 치환, 나머지가 이산이다.
- * 0.3 ≈ 1280×860 에서 스크롤 220px — 치환에 77px, 비행에 143px 이 간다.
- *
- * 한때 0.22 였다. 그때 기각된 것은 **비행이 긴 것**이었다(글자가 다 꺼진 뒤로도
- * 점 무리가 허공을 건너갔다). 지금 늘어나는 것은 비행이 아니라 치환 구간이라
- * 그 문제가 아니다 — 비행 구간은 0.195 로 예전(0.22)과 비슷하게 남는다.
- */
-const GLYPH_RUN = 0.3;
 /** 도착 상한. hp = 1 에서는 **전부** 자리 잡아 있어야 한다. */
 const GLYPH_END = 0.97;
 /** 글자 점의 화면 크기(px). 차에 다가가며 차체 점 크기로 자란다. */
@@ -1882,6 +1872,14 @@ interface Glyphs {
   nextN: number;
   /** 실제로 쓰인 잉크 색 — 팔레트의 잉크 버킷을 이 색으로 채운다. */
   colors: RGB[];
+  /**
+   * 전 글자 공통 일정 — 시작 hp · 1/구간 · 치환 몫 · 1/(1−치환).
+   * 도로가 차오르는 시점을 이 하나로 잰다(시차 0 기준).
+   */
+  t0: number;
+  tk: number;
+  h0: number;
+  m0: number;
 }
 
 /** `rgb(240, 240, 242)` · `rgb(240 240 242 / .5)` 에서 앞의 세 수만 본다. */
@@ -1946,12 +1944,14 @@ function bakeGlyphs(vh: number, cap: number, mobile: boolean): Glyphs | null {
      안에 들어오면서 형태가 남는 지점이다. */
   const stepK = mobile ? 1.2 : 1;
 
-  /** 무리별 수집함 — [문서x, 문서y, 알파, 버킷, 출발, 구간, 요소안 세로위치] */
+  /** 무리별 수집함 — [문서x, 문서y, 알파, 버킷] */
   const bag: Record<string, number[][]> = { lane: [], next: [] };
   /** 잉크 색 — 나온 순서대로 최대 `INK_SLOTS` 가지. */
   const colors: RGB[] = [];
-  /** 요소별 일정 [요소, 시작 hp, 1/구간]. **읽기가 다 끝난 뒤에** 한꺼번에 쓴다. */
-  const sched: [HTMLElement, number, number][] = [];
+  /** 글자 요소들. **읽기가 다 끝난 뒤에** 한꺼번에 일정을 써 준다. */
+  const sched: HTMLElement[] = [];
+  /** 가장 위에 있는 글자의 문서 y — 치환이 끝나야 하는 시점을 이 글자가 정한다. */
+  let anchorY = Number.POSITIVE_INFINITY;
 
   for (const el of els) {
     const group = el.dataset.ink === 'lane' ? 'lane' : 'next';
@@ -1984,28 +1984,9 @@ function bakeGlyphs(vh: number, cap: number, mobile: boolean): Glyphs | null {
     }
     const bucket = INK_B0 + slot;
 
-    /* 이 요소의 일정. **글자의 위끝이 화면 위끝에 닿는 순간**(= scrollY 가 글자
-       상자의 문서 top 에 닿는 때)에 점이 차에 도착한다 — 글자는 잘리기 전에 다
-       풀려 있다. 처음에는 아래끝이 벗어나는 순간으로 잡았는데, 그러면 워드마크가
-       풀리는 구간(1280×860 에서 스크롤 154~315px) 내내 M·A 의 윗부분이 화면 밖에
-       잘려 있어 **글자가 점이 되는 것을 볼 수가 없었다**(스크린샷으로 확인).
-       반대로 너무 늦게 잡으면 글자가 있던 자리가 이미 화면 밖이라 점이 허공에서
-       날아오는 것으로 보인다. */
-    const endHp = Math.min(GLYPH_END, (box.top + sy) / vh);
-    const startHp = Math.max(0.01, endHp - GLYPH_RUN);
-    const run = Math.max(0.06, endHp - startHp);
-    /* 치환 구간. 비율이 기본이되 **스크롤 px 로 바닥을 깐다** — 구간이 짧게
-       잘린 요소(워드마크는 문서 맨 위라 앞에 여유가 없다)에서도 글자가 점으로
-       서 있는 것을 볼 시간이 남는다. */
-    const hold = Math.min(
-      GLYPH_HOLD_MAX,
-      Math.max(GLYPH_HOLD, GLYPH_HOLD_PX / Math.max(1, run * vh)),
-    );
-    /* DOM 글자가 꺼지는 구간 = **치환 구간 그 자체**다. 글자가 옅어지는 만큼 같은
-       자리의 점이 켜지고, 구간 끝에서 글자는 0 · 점은 만개한다 — 그 순간 화면에
-       서 있는 것이 **점으로 찍힌 글자**다. 둘을 따로 두면 안 된다.
-       CSS 에는 나눗셈이 아니라 곱셈으로 넘긴다 — calc() 의 분모는 수여야 한다. */
-    sched.push([el, startHp, 1 / Math.max(1e-3, run * hold)]);
+    // 일정은 전 요소가 하나다(아래 §한 번에). 여기서는 요소만 모아 둔다.
+    sched.push(el);
+    anchorY = Math.min(anchorY, box.top + sy);
 
     const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
     const dst = bag[group]!;
@@ -2025,7 +2006,6 @@ function bakeGlyphs(vh: number, cap: number, mobile: boolean): Glyphs | null {
         const baseline =
           (r.height - (m.fontBoundingBoxAscent + m.fontBoundingBoxDescent)) / 2 +
           m.fontBoundingBoxAscent;
-        const u = (r.top - box.top) / Math.max(1, box.height);
 
         const bw = Math.min(side, Math.ceil(r.width) + padX * 2);
         const bh = Math.min(side, Math.ceil(r.height) + padY * 2);
@@ -2043,26 +2023,41 @@ function bakeGlyphs(vh: number, cap: number, mobile: boolean): Glyphs | null {
           for (let px = ox; px < bw; px += step) {
             const cov = data[((row + (px | 0)) << 2) + 3]! / 255;
             if (cov < GLYPH_INK) continue;
-            dst.push([
-              x0 + px + sx,
-              y0 + py + sy,
-              Math.min(1, 0.42 + cov * 0.62),
-              bucket,
-              startHp,
-              run,
-              u,
-              hold,
-            ]);
+            dst.push([x0 + px + sx, y0 + py + sy, Math.min(1, 0.42 + cov * 0.62), bucket]);
           }
         }
       }
     }
   }
 
-  // 읽기가 전부 끝난 다음에 쓴다.
-  for (const [el, at, k] of sched) {
-    el.style.setProperty('--ink-at', at.toFixed(4));
-    el.style.setProperty('--ink-k', k.toFixed(3));
+  /* --- 한 번에 -------------------------------------------------------
+     **다섯 요소의 일정이 하나다.** 요소마다 자기 글자가 화면을 벗어나는 때에
+     맞춰 차례로 풀게 했더니 "글자가 순차적으로 바뀌어 어색하다"는 말을 들었다.
+     지금은 전부 같은 hp 에 치환을 시작해 같은 hp 에 끝내고, 같은 hp 에 도착한다.
+     화면 전체의 글이 **한 덩어리로** 점이 되었다가 위에서부터 풀린다.
+
+     끝나는 시점은 **가장 위에 있는 글자**(워드마크)가 정한다. 그 글자의 위끝이
+     화면 위끝에 닿기 전에 치환이 끝나야 점-글자를 볼 수 있다. 나머지 글은 그때
+     아직 화면 안이라, 점으로 선 채로 남아 있다가 같이 풀린다.
+
+     길이는 **비율이 아니라 스크롤 px** 로 정한다(`GLYPH_HOLD_PX`·`GLYPH_FLY_PX`).
+     비율로 잡으면 여는 화면 길이를 바꿀 때마다 체감 속도가 같이 변한다. */
+  const holdHp = GLYPH_HOLD_PX / vh;
+  const tHold = Number.isFinite(anchorY) ? anchorY / vh : holdHp;
+  const startHp = Math.max(0.004, tHold - holdHp);
+  const arrive = Math.min(GLYPH_END, tHold + GLYPH_FLY_PX / vh);
+  const run = Math.max(0.02, arrive - startHp);
+  const hold = Math.min(0.9, Math.max(0.05, (tHold - startHp) / run));
+
+  /* DOM 글자가 꺼지는 구간 = **치환 구간 그 자체**다. 글자가 옅어지는 만큼 같은
+     자리의 점이 켜지고, 구간 끝에서 글자는 0 · 점은 만개한다 — 그 순간 화면에
+     서 있는 것이 **점으로 찍힌 글자**다. 둘을 따로 두면 안 된다.
+     읽기가 전부 끝난 다음에 쓴다. CSS 에는 나눗셈이 아니라 곱셈으로 넘긴다 —
+     calc() 의 분모는 수여야 한다. */
+  const inkK = 1 / Math.max(1e-4, run * hold);
+  for (const el of sched) {
+    el.style.setProperty('--ink-at', startHp.toFixed(4));
+    el.style.setProperty('--ink-k', inkK.toFixed(3));
   }
 
   /* 상한을 넘으면 고르게 솎는다. 무리마다 따로 솎아야 한 무리가 다른 무리의
@@ -2073,6 +2068,18 @@ function bakeGlyphs(vh: number, cap: number, mobile: boolean): Glyphs | null {
   const all = lane.concat(next);
   const n = all.length;
   if (n === 0) return null;
+
+  /* 시차는 **화면 전체의 세로 위치**로 준다. 요소 안에서만 흩으면 다섯 덩이가
+     각각 위아래로 풀려 "덩어리 다섯 개"로 보인다. 첫 화면의 글 전체를 하나의
+     면으로 보고 위에서부터 풀어야 한 장이 벗겨지는 것으로 읽힌다. */
+  let yMin = Number.POSITIVE_INFINITY;
+  let yMax = Number.NEGATIVE_INFINITY;
+  for (const row of all) {
+    const y = row[1]!;
+    if (y < yMin) yMin = y;
+    if (y > yMax) yMax = y;
+  }
+  const ySpan = Math.max(1, yMax - yMin);
 
   const rnd = mulberry32(0x91c5);
   const out: Glyphs = {
@@ -2091,23 +2098,24 @@ function bakeGlyphs(vh: number, cap: number, mobile: boolean): Glyphs | null {
     nextOff: lane.length,
     nextN: next.length,
     colors,
+    t0: startHp,
+    tk: 1 / run,
+    h0: hold,
+    m0: 1 / Math.max(0.05, 1 - hold),
   };
   for (let i = 0; i < n; i++) {
     const p = all[i]!;
-    const start = p[4]!;
-    const run = p[5]!;
     out.dx[i] = p[0]!;
     out.dy[i] = p[1]!;
     out.a[i] = p[2]!;
     out.b[i] = p[3]!;
-    /* 일정은 **요소 단위로 하나다.** 점마다 다른 출발을 `d` 에 더해 버리면 치환
-       구간에도 시차가 생겨 글자가 통째로 점이 되지 못한다. 시차는 이산 구간이
-       시작되는 지점에만 얹는다. */
-    const hold = p[7]!;
-    const lag = GLYPH_STAGGER * (1 - hold) * (0.6 * p[6]! + 0.4 * rnd());
-    out.d[i] = start;
+    /* 일정은 하나다. 점마다 다른 출발을 `d` 에 더해 버리면 치환 구간에도 시차가
+       생겨 글이 통째로 점이 되지 못한다. 시차는 이산 구간이 시작되는 지점에만
+       얹는다 — 도착은 전부 같이 `eRaw` = 1 이다. */
+    const u = (p[1]! - yMin) / ySpan;
+    const lag = GLYPH_STAGGER * (1 - hold) * (0.7 * u + 0.3 * rnd());
+    out.d[i] = startHp;
     out.k[i] = 1 / run;
-    // 위쪽 글자가 먼저 풀린다. 도착은 여전히 다 같다(전부 eRaw = 1).
     out.hold[i] = hold + lag;
     out.mv[i] = 1 / Math.max(0.05, 1 - hold - lag);
     /* 색을 갈아타는 지점 — 점마다 달라야 "스캔이 다시 분류한 것"으로 읽힌다.
@@ -2451,6 +2459,12 @@ export interface RoadProbe {
     raw: number;
     /** 이번 프레임에 찍은 글자 점의 평균 화면 이동거리(px). 치환 중에는 0 */
     move: number;
+    /** 화면 위끝 밖으로 밀려 안 그려진 글자 점 수 */
+    clipTop: number;
+    /** `hp` 의 자(px) — 여는 화면의 실제 길이 */
+    span: number;
+    /** 전 글자 공통 일정(스크롤 px) — [치환 시작, 치환 끝, 도착] */
+    t: [number, number, number];
     /** 이번 프레임에 차에 자리 잡은 점 */
     seated: number;
     /** 자리를 못 얻어 흩어지는 점 */
@@ -2500,6 +2514,9 @@ interface LoopState {
   /** 마지막으로 구운 때의 뷰포트 — 폭·높이가 달라지면 글자 자리가 달라진다 */
   glyphW: number;
   glyphH: number;
+  /** `hp` 의 자(px) — 여는 화면의 실제 길이. 달라지면 글자 일정을 다시 굽는다 */
+  hpSpan: number;
+  glyphSpan: number;
   /** 마지막으로 CSS 변수에 흘려보낸 값 — 안 바뀌면 DOM 을 건드리지 않는다 */
   cssH: number;
   cssP: number;
@@ -2628,6 +2645,8 @@ export function usePointCloud(
     glyphFonts: false,
     glyphW: -1,
     glyphH: -1,
+    hpSpan: 1,
+    glyphSpan: -1,
     cssH: Number.NaN,
     cssP: Number.NaN,
     cssV: -1,
@@ -2847,8 +2866,6 @@ export function usePointCloud(
       st.docRange = Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
     }
     const p = clamp01(scrollY / st.docRange);
-    /** 히어로 카피 퇴장 진행도 — 한 화면 스크롤에 다 빠진다. */
-    const hp = clamp01(scrollY / Math.max(1, window.innerHeight * 0.85));
 
     /* --- 연구 무대 진행도 ---------------------------------------------
        문서 비율이 아니라 **연구 섹션의 실제 뷰포트 위치**로 잡는다. 언어·콘텐츠
@@ -2884,6 +2901,8 @@ export function usePointCloud(
        rect 읽기는 프레임당 여기 한 곳뿐이고, CSS 변수 쓰기보다 **앞**에 있다 —
        읽기·쓰기가 번갈아 일어나면 프레임마다 강제 리플로가 생긴다.            */
     let approach = 0;
+    /** 무대 상단의 문서 y(px). 0 이하면 무대가 없는 페이지다. */
+    let stageDocY = 0;
     /** 덱의 가로 스크롤 위치(px). 세로 무대면 0 — 아래에서 주행거리에 더해진다. */
     let deckX = 0;
     /** 덱 모드의 시점 진행도. 세로 무대면 음수로 남아 무시된다. */
@@ -2892,6 +2911,8 @@ export function usePointCloud(
     for (let i = 0; i < ACTS; i++) actT[i] = Number.NEGATIVE_INFINITY;
     if (st.phaseEl) {
       const r = st.phaseEl.getBoundingClientRect();
+      // 무대 상단의 **문서 좌표** — 여는 화면의 길이가 곧 이 값이다(아래 hp).
+      stageDocY = r.top + scrollY;
       // 무대 상단이 뷰포트 바닥에 닿으면 0, 뷰포트 상단까지 올라오면 1
       approach = clamp01((H - r.top) / Math.max(1, H));
       const deck = st.deckEl;
@@ -2930,6 +2951,22 @@ export function usePointCloud(
     } else if (still) {
       approach = 1;
     }
+
+    /* --- 히어로 카피 퇴장 진행도 --------------------------------------
+       **여는 화면의 실제 길이에 묶는다.** 한때 `0.85 × 창높이` 로 고정했는데,
+       그러면 여는 화면을 늘려도 연출은 그대로 첫 화면 안에서 끝나 버린다 —
+       글자가 점이 되어 차로 가는 데 스크롤 몇 번을 쓰게 하려면 이 자가 늘어나야
+       한다. 무대 상단의 **문서 좌표**를 자로 쓰면, 여는 화면을 CSS 로 늘린 만큼
+       연출도 같이 늘어난다(마크업이 척도를 정하고 훅은 따라간다).
+
+       빼는 0.15H 는 무대가 화면에 들어서기 전에 hp 가 1 이 되게 하는 여유다 —
+       연출이 무대 진입과 겹치면 두 가지가 동시에 일어난다.
+
+       무대가 없는 페이지(연구·논문…)에는 여는 화면도 없다. 예전 자로 폴백한다.
+       rect 는 위에서 이미 한 번 읽었다 — 여기서 DOM 을 다시 읽지 않는다. */
+    st.hpSpan =
+      stageDocY > 0 ? Math.max(1, stageDocY - H * 0.15) : Math.max(1, window.innerHeight * 0.85);
+    const hp = clamp01(scrollY / st.hpSpan);
 
     /* --- 조용한 영역 굽기 -------------------------------------------
        `data-quiet` 요소 **안의 글줄이 앉은 자리**에서 점의 알파를 떨어뜨린다.
@@ -3027,15 +3064,14 @@ export function usePointCloud(
 
        동작 줄이기에서는 아예 굽지 않는다 — `hp` 가 0 이라 글자는 제자리에 서
        있고, 연출이 돌지 않으므로 점군도 필요 없다. */
-    if (st.glyphStale && !still) {
+    if ((st.glyphStale || Math.abs(st.hpSpan - st.glyphSpan) > 2) && !still) {
       st.glyphStale = false;
       st.glyphW = W;
       st.glyphH = H;
-      const baked = bakeGlyphs(
-        Math.max(1, window.innerHeight * 0.85),
-        mobile ? GLYPH_MAX_MOBILE : GLYPH_MAX,
-        mobile,
-      );
+      // 일정은 `hp` 의 자에 걸려 있다 — 자가 달라지면(무대 위치가 잡히는 첫
+      // 프레임·재조판) 구간 길이가 통째로 달라지므로 다시 굽는다.
+      st.glyphSpan = st.hpSpan;
+      const baked = bakeGlyphs(st.hpSpan, mobile ? GLYPH_MAX_MOBILE : GLYPH_MAX, mobile);
       glyphRef.current = baked;
       if (baked && baked.colors.length) setGlyphColors(pal, baked.colors);
       slotRef.current.ordered = false;
@@ -3045,6 +3081,29 @@ export function usePointCloud(
     /* 차량 등장 — 무대가 다가오면서 한 대씩. 한 번 등장한 뒤로는 계속 함께 달린다
        (푸터까지 도로가 이어지는데 차만 사라지면 그게 더 이상하다). */
     const fleetK = still ? 1 : smooth(clamp01((approach - 0.02) / 0.8));
+
+    /** 첫 화면의 글자가 아직 차로 가는 중인가. */
+    const glyphOn = !still && glyphRef.current !== null && hp < 1;
+
+    /* --- 빈 도로 -------------------------------------------------------
+       **글자가 닿기 전에는 도로에 차가 한 대도 없다.** 글자를 받은 차는 글자의
+       도착이 알파를 정하지만(아래 `aCar`), 글자를 안 받은 차·보행자까지 `fleetK`
+       로 먼저 나타나면 "빈 도로였다가 글자가 차가 되는" 장면이 성립하지 않는다.
+       그 차들도 글자 도착 구간(e 0.7→1)에 함께 선다.
+
+       `fleetK` 와는 **큰 쪽**을 쓴다. 도착 뒤로는 1 이라 어차피 `fleetK` 를 덮고,
+       hp = 1 에서는 둘 다 1 이라 인계가 보이지 않는다. */
+    const gl0 = glyphRef.current;
+    const roadK =
+      glyphOn && gl0
+        ? smooth(
+            clamp01(
+              (smooth(clamp01((clamp01((hp - gl0.t0) * gl0.tk) - gl0.h0) * gl0.m0)) - 0.7) / 0.3,
+            ),
+          )
+        : 1;
+    /** 배역이 실제로 보이는 정도 — 글자 도착이 무대 접근보다 먼저 선다. */
+    const fleetG = glyphOn ? Math.max(fleetK, roadK) : fleetK;
 
     /**
      * **시점은 연구 무대에서만 올라간다.**
@@ -3247,7 +3306,7 @@ export function usePointCloud(
       if (!st.started) fleet.t = 0;
     } else {
       const ds = scrollZ - st.prevScrollZ;
-      if (ds > 0 && fleetK > 0.001) {
+      if (ds > 0 && fleetG > 0.001) {
         fleet.accum += ds / FLEET_V;
         let subs = 0;
         while (fleet.accum >= SIM_DT && subs < SIM_MAX_SUB) {
@@ -3551,7 +3610,7 @@ export function usePointCloud(
       st.drawnBoost === 0 &&
       st.camZ === st.drawnZ &&
       riseK === st.drawnRise &&
-      fleetK === st.drawnFleet &&
+      fleetG === st.drawnFleet &&
       introFade >= 1
     ) {
       return;
@@ -3684,6 +3743,8 @@ export function usePointCloud(
     /** 글자 점이 글자 자리에서 옮겨 간 거리의 합·개수 — `roadProbe` 로만 나간다. */
     let moveSum = 0;
     let moveN = 0;
+    /** 화면 **위끝 밖**으로 밀려 안 그려진 글자 점 — 비행이 잘리는지 보는 창구. */
+    let clipTop = 0;
 
     /** bin 에 넣는 마지막 한 걸음 — `emit` 의 꼬리와 같다. 글자 점 전용. */
     const putInk = (sx: number, sy: number, b: number, a: number, ps: number): void => {
@@ -3718,6 +3779,8 @@ export function usePointCloud(
       size: number,
       /** 글자 점 인덱스 */
       i: number,
+      /** true = LOD 밖의 자리다. 도착 직전에 꺼져야 인계에 남지 않는다. */
+      spare = false,
     ): void => {
       if (dz < nearSoft) return;
       const gl = glyphRef.current;
@@ -3739,7 +3802,11 @@ export function usePointCloud(
       // 약하게 처진다. 직선으로 이으면 글자에서 차까지가 **하늘을 가로지르는 선**
       // 이라 도로와 무관해 보인다. 튀거나 도는 궤적은 이 사이트가 아니다.
       const sy = ly + (ty - ly) * e + GLYPH_SAG * H * 4 * e * (1 - e);
-      if (sy < -8 || sy > H + 8) return;
+      if (sy < -8) {
+        clipTop++;
+        return;
+      }
+      if (sy > H + 8) return;
 
       let fog = 1 - dz * INV_FAR;
       if (fog < 0) fog = 0;
@@ -3768,6 +3835,9 @@ export function usePointCloud(
       // 시작할 때 켜져서, 글자가 꺼진 자리에 아무것도 없는 순간이 생긴다.
       const la = gl.a[i]! * clamp01(eRaw / (hold * GLYPH_IN));
       let a = (la + (alpha - la) * e) * fog * shade;
+      /* LOD 밖의 자리는 도착 직전에 꺼진다. 그래야 hp = 1 에서 `drawCar` 가
+         찍는 lod 개의 점과 **정확히 같은 집합**이 남는다. */
+      if (spare) a *= 1 - smooth(clamp01((e - 0.9) * 10));
       if (a < 0.05) return;
       if (a > 1) a = 1;
 
@@ -3981,7 +4051,10 @@ export function usePointCloud(
         aRest = Math.max(alpha, aCar * smooth(clamp01((eCar - 0.55) / 0.45)));
       }
 
-      for (let j = 0; j < lod; j++) {
+      /* 글자가 앉는 동안에는 **LOD 밖까지** 그린다(`gN` 이 lod 보다 클 수 있다).
+         그 점들은 도착 직전에 꺼지므로 hp = 1 의 인계에는 남지 않는다. */
+      const jMax = gN > lod ? gN : lod;
+      for (let j = 0; j < jMax; j++) {
         const lx = tpl.lx[j]!;
         const lz = tpl.lz[j]!;
         const wx = baseX + lx * cth + lz * sth;
@@ -3989,12 +4062,14 @@ export function usePointCloud(
         const wdz = dz0 - lx * sth + lz * cth;
         const bkt = braking && tpl.lamp[j] ? RAMP_BUCKETS - 1 : tpl.bucket[j]!;
         if (j < gN) {
-          glyphEmit(wx, wy, wdz, bkt, tpl.baseA[j]! * aCar, tpl.sw[j]!, gOff + j);
-        } else {
+          glyphEmit(wx, wy, wdz, bkt, tpl.baseA[j]! * aCar, tpl.sw[j]!, gOff + j, j >= lod);
+        } else if (j < lod) {
           emit(wx, wy, wdz, bkt, tpl.baseA[j]! * aRest, tpl.sw[j]!, true);
         }
       }
-      carsDrawn++;
+      // 도로 위에 실제로 몸통을 올린 차만 센다 — 글자만 들고 있는 차는 아직
+      // 차가 아니다(검사기가 "도착 전 빈 도로"를 이 값으로 잰다).
+      if (aRest > 0.02) carsDrawn++;
     };
 
     /* --- 글자 점을 차에 나눠 준다 -------------------------------------
@@ -4003,7 +4078,6 @@ export function usePointCloud(
        글자가 프레임마다 다른 차로 튀지 않는다.
 
        받을 자리가 모자라 남은 점은 흩어져 사라진다(§돌아오지 않은 반사). */
-    const glyphOn = !still && glyphRef.current !== null && hp < 1;
     const slots = slotRef.current;
     if (glyphOn) {
       const gl = glyphRef.current!;
@@ -4013,11 +4087,17 @@ export function usePointCloud(
       const take = slots.take;
       const col0 = fleet.cols[0]!;
 
-      /** 그 차가 지금 받을 수 있는 점 수 — `drawCar` 의 LOD 식과 **같아야** 한다. */
-      const lodOf = (tpl: CarTemplate, wid: number, dz0: number): number => {
-        const lod = (18 + ((wid * f) / dz0) * 5) | 0;
-        return lod > tpl.n ? tpl.n : lod;
-      };
+      /**
+       * 그 차가 받을 수 있는 점 수 — **템플릿 전체**다.
+       *
+       * LOD 만큼만 받게 했더니 데스크톱에서 자리가 1,950개뿐이라 글자 점을
+       * 2,000개 넘게 구울 수 없었고, 그중 300개는 자리를 못 얻어 흩어졌다.
+       * LOD 는 "멀리 있는 차에 점을 낭비하지 말자"는 예산 규칙인데, 글자가
+       * 내려앉는 동안에는 그 점들이 **이미 화면에 있다**(글자 자리에) — 아낄
+       * 것이 없다. 자리를 못 얻어 사라지는 것보다 촘촘한 차가 낫다.
+       * LOD 밖의 점은 도착 직전(e 0.9→1)에 꺼져 인계가 매끄럽다(`drawCar`).
+       */
+      const seatsOf = (tpl: CarTemplate): number => tpl.n;
       /** 대열 k번째 차의 후면 깊이(m). `drawCar` 에 넘기는 값과 같다. */
       const laneDz = (k: number): number => {
         const veh = vehicles[k];
@@ -4103,7 +4183,7 @@ export function usePointCloud(
         const k = slots.laneIds[i]!;
         const dz0 = laneDz(k);
         const sh = cars[fleet.shape[k]!]!;
-        lods[i] = dz0 >= near && dz0 <= FAR ? lodOf(sh.rear, sh.shape.wid, dz0) : 0;
+        lods[i] = dz0 >= near && dz0 <= FAR ? seatsOf(sh.rear) : 0;
       }
       const laneEnd = gl.laneOff + gl.laneN;
       slots.lost[0] = share(slots.laneIds, slots.laneK, gl.laneOff, laneEnd, slots.laneOff, slots.laneN);
@@ -4114,7 +4194,7 @@ export function usePointCloud(
         const id = slots.nextIds[i]!;
         const dz0 = nextDz(id);
         const sh = cars[col0.shape[id]!]!;
-        lods[i] = dz0 >= near && dz0 <= FAR ? lodOf(sh.rear, sh.shape.wid, dz0) : 0;
+        lods[i] = dz0 >= near && dz0 <= FAR ? seatsOf(sh.rear) : 0;
       }
       const nextEnd = gl.nextOff + gl.nextN;
       slots.lost[2] = share(slots.nextIds, slots.nextK, gl.nextOff, nextEnd, slots.nextOff, slots.nextN);
@@ -4133,7 +4213,7 @@ export function usePointCloud(
        차체 점 자리로 가는 것이지 차의 알파를 따르지 않는데(치환 구간에는 아직
        글자 위에 있다), 차를 통째로 걸러내면 그 점들이 하나도 안 그려진다 —
        실제로 여는 화면에서 M 만 점이 되고 A·I·A 는 나타나지 않았다. */
-    if (fleetK > 0.004 || egoA > 0.02 || glyphOn) {
+    if (fleetG > 0.004 || egoA > 0.02 || glyphOn) {
       for (let k = vehicles.length - 1; k >= 0; k--) {
         const veh = vehicles[k]!;
         // 후면 기준 깊이 — 앞범퍼(veh.x)에서 차 길이를 뺀다.
@@ -4141,7 +4221,7 @@ export function usePointCloud(
         if (dz0 < near || dz0 > FAR) continue;
         // 멀리 있는 차부터 한 대씩 나타난다 — 선두가 먼저, 바로 앞차가 마지막.
         const order = (k - 1) / FLEET_N;
-        const va = k === 0 ? egoA : clamp01((fleetK - order * 0.62) / 0.2);
+        const va = k === 0 ? egoA : clamp01((fleetG - order * 0.62) / 0.2);
         if (va <= 0.02 && slots.laneN[k]! === 0) continue;
         const sh = cars[fleet.shape[k]!]!;
         const lane = LANE_X + fleet.jog[k]!;
@@ -4247,14 +4327,14 @@ export function usePointCloud(
     /* ③b 옆 차로 · 마주 오는 차로 --------------------------------------
        이쪽은 링 좌표라 월드 z 로 되사상한다. 같은 방향은 링 좌표가 그대로
        주행거리이고, 마주 오는 차로는 부호를 뒤집어 우리 쪽으로 다가오게 한다. */
-    if (fleetK > 0.004 || glyphOn) {
+    if (fleetG > 0.004 || glyphOn) {
       for (let ci = 0; ci < fleet.cols.length; ci++) {
         const col = fleet.cols[ci]!;
         for (let k = 0; k < col.veh.length; k++) {
           const veh = col.veh[k]!;
           // 아직 등장 전이어도 글자를 들고 있으면 그린다(§③a 와 같은 이유).
           const gN = ci === 0 ? slots.nextN[veh.id]! : 0;
-          if (fleetK <= 0.004 && gN === 0) continue;
+          if (fleetG <= 0.004 && gN === 0) continue;
           const ring = veh.x - veh.length;
           // 월드 z — 씬과 같은 주기(SCENE_LEN)라 되접는 지점에서 어긋나지 않는다.
           let wz = col.dir > 0 ? ring : SCENE_LEN - ring;
@@ -4264,7 +4344,7 @@ export function usePointCloud(
           if (dz0 < near || dz0 > FAR) continue;
           const sh = cars[col.shape[veh.id]!]!;
           let lane = col.x + col.jog[veh.id]!;
-          let a = fleetK;
+          let a = fleetG;
           // 04막: 옆 차로 한 대가 협조 합류로 우리 차로에 들어온다.
           // 횡·종방향을 **같은 진행도로 함께** 옮긴다 — 옆으로만 밀면 몸통이 겹친다.
           if (ci === 0 && veh.id === fleet.mergeIdx && Number.isFinite(mergeTargetDz)) {
@@ -4329,7 +4409,7 @@ export function usePointCloud(
        LiDAR 에서 보행자는 세로로 선 점 덩어리다. 다리를 걸음 위상에 따라
        앞뒤로 벌려 놓으면 정지한 기둥이 아니라 **걷는 사람**으로 읽힌다. */
     let pedsDrawn = 0;
-    if (fleetK > 0.004) {
+    if (fleetG > 0.004) {
       const pn = ped.n;
       for (let i = 0; i < fleet.peds.length; i++) {
         const q = fleet.peds[i]!;
@@ -4353,7 +4433,7 @@ export function usePointCloud(
             wy + bob + ped.ly[j]! * q.h,
             dz0 + ped.lz[j]! + (limb ? limb * swing * (q.v < 0 ? -1 : 1) : 0),
             ped.bucket[j]!,
-            ped.baseA[j]! * fleetK,
+            ped.baseA[j]! * fleetG,
             ped.sw[j]!,
             true,
           );
@@ -4752,7 +4832,7 @@ export function usePointCloud(
     st.drawnZ = st.camZ;
     st.drawnBoost = kBoost;
     st.drawnRise = riseK;
-    st.drawnFleet = fleetK;
+    st.drawnFleet = fleetG;
     st.drawnSteer = steer;
     st.drawnPitch = pitch;
     st.drawnH = hp;
@@ -4793,6 +4873,9 @@ export function usePointCloud(
             e: 0,
             raw: 0,
             move: 0,
+            clipTop: 0,
+            span: 0,
+            t: [0, 0, 0],
             seated: 0,
             lost: 0,
             group: [0, 0],
@@ -4813,7 +4896,7 @@ export function usePointCloud(
       rp.aim[3] = cx;
       rp.quietBoxes = st.quietBoxes;
       rp.rise = riseK;
-      rp.fleet = fleetK;
+      rp.fleet = fleetG;
       rp.cars = carsDrawn;
       let ov = 0;
       let worst = 0;
@@ -4899,6 +4982,14 @@ export function usePointCloud(
         mo.e = gl && gl.n ? sum / gl.n : 0;
         mo.raw = gl && gl.n ? rawSum / gl.n : 0;
         mo.move = moveN ? moveSum / moveN : 0;
+        mo.clipTop = clipTop;
+        mo.span = st.hpSpan;
+        if (gl) {
+          const run = 1 / gl.tk;
+          mo.t[0] = gl.t0 * st.hpSpan;
+          mo.t[1] = (gl.t0 + run * gl.h0) * st.hpSpan;
+          mo.t[2] = (gl.t0 + run) * st.hpSpan;
+        }
         mo.seated = seated;
         mo.lost = gl ? gl.n - seated : 0;
         mo.group[0] = gl ? gl.laneN : 0;
