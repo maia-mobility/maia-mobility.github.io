@@ -77,12 +77,16 @@ const RECRUIT_NOTE = RECRUIT.length > 1 ? RECRUIT[RECRUIT.length - 1] : '';
 
 <main class="drive" id="main">
   {/* ① 여는 화면 — 이름이 가장 크다. 연구실 사이트에서 가장 먼저 읽혀야 하는 것. */}
+  {/* `data-ink` 는 **캔버스에게 주는 표식**이다(`data-quiet` 와 같은 결). 이 글자들은
+      스크롤을 내리면 점으로 풀려 배경 도로의 차체 점군에 자리 잡는다. 값은 어느
+      차가 받는가다: `lane` = 우리 차로의 앞차 대열, `next` = 옆 차로.
+      이름이 가장 크니 이름이 우리가 끝까지 따라가는 차들이 된다. */}
   <section class="open" data-quiet>
-    <h1 class="wordmark">{SITE.short}</h1>
-    <p class="expand">{t(SITE.expansion)}</p>
-    <p class="claim">{t(SITE.tagline)}</p>
-    <p class="lede">{t(SITE.hero)}</p>
-    <p class="ann aff">
+    <h1 class="wordmark" data-ink="lane">{SITE.short}</h1>
+    <p class="expand" data-ink="next">{t(SITE.expansion)}</p>
+    <p class="claim" data-ink="next">{t(SITE.tagline)}</p>
+    <p class="lede" data-ink="next">{t(SITE.hero)}</p>
+    <p class="ann aff" data-ink="next">
       {AFFIL.map((part, i) => <span>{i < AFFIL.length - 1 ? `${part},` : part}</span>)}
     </p>
   </section>
@@ -251,6 +255,20 @@ const RECRUIT_NOTE = RECRUIT.length > 1 ? RECRUIT[RECRUIT.length - 1] : '';
     flex-wrap: wrap;
     /* 모노 한 칸(0.6em)에 트래킹(0.12em)을 더한 값 — 마디 사이가 낱말 사이와 같아진다. */
     gap: 0 0.72em;
+  }
+
+  /*
+   * 글자가 점으로 풀려 나가는 동안 **DOM 글자는 꺼진다.** 켜지는 쪽은 캔버스다 —
+   * 두 구간이 같은 자리·같은 진행도라야 "글자가 점으로 바뀌었다"로 읽힌다.
+   * 그래서 구간을 여기서 정하지 않는다: 언제 풀릴지는 그 글자의 위끝이 화면
+   * 위끝에 닿는 순간이 정하고(훅이 잰다), 훅이 `--ink-at`·`--ink-k` 로 알려 준다.
+   *
+   * **JS 가 없으면 변수도 없다.** 폴백은 전부 보이는 상태다 — 시작점 9 는
+   * `--h` 가 영영 닿지 않는 값이라 opacity 가 1 로 굳는다.
+   * `transition` 은 두지 않는다. 재생 헤드는 시간이 아니라 스크롤이다.
+   */
+  [data-ink] {
+    opacity: calc(1 - clamp(0, (var(--h, 0) - var(--ink-at, 9)) * var(--ink-k, 1), 1));
   }
 
   /* ---- ② 연구 --------------------------------------------------------- */
