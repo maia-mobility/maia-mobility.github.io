@@ -204,6 +204,31 @@
   text-size-adjust: 100%;
   scroll-behavior: smooth;
   scroll-padding-block-start: var(--space-8);
+  /*
+   * 스크롤바 — 브라우저 기본값은 이 사이트 것이 아닌 유일한 표면이었다. 마우스를
+   * 연결한 맥은 스크롤바를 항상 보이므로, 밝은 회색 막대가 계측 화면의 오른쪽
+   * 가장자리에 얹혀 있었다(교수님 지적). **숨기지 않는다** — 문서가 얼마나
+   * 남았는지 알리는 유일한 장치다. 헤어라인 톤으로 얇게 만들어 녹아들게 한다:
+   * 트랙은 투명(배경이 비친다), 막대는 hover 헤어라인 색. 모서리는 전역 가드가
+   * 0 으로 잡는다. 표준 속성(`scrollbar-*`)이 있으면 그것이 이기고, 아래의
+   * `::-webkit-scrollbar` 는 그 속성을 모르는 옛 Safari 를 위한 것이다.
+   */
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-hot) transparent;
+}
+
+::-webkit-scrollbar {
+  inline-size: 6px;
+  block-size: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--line-hot);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--fg-mute);
 }
 
 :where(body, h1, h2, h3, h4, h5, h6, p, figure, blockquote, dl, dd, ol, ul, hr, fieldset) {
