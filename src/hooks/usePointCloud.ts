@@ -1627,6 +1627,16 @@ const ACT_CDA = 3;
  * 막이 제자리를 잡기 전/후로 겹치는 폭(막 길이 비율).
  * `t` 가 −LEAD 에서 뜨기 시작해 IN 에서 만개하고, OUT 부터 지다가 1+TAIL 에서 사라진다.
  */
+/**
+ * 시점이 오르기 시작하는 **선행 거리**(막 길이 배수).
+ *
+ * 0.62 였다. 그때는 여는 화면이 정확히 한 화면이라 무대 앞에 여유가 없었다 —
+ * 0.85 로 잡으면 스크롤 0 에서 이미 rise 0.09 였다. 지금은 여는 화면이 글자
+ * 연출 때문에 세 화면 넘게 길어져 **앞에 여유가 충분하다.** 1.3 이면 상승이
+ * 1,100px 에 걸쳐 일어나고(전에는 실질 200px), 스크롤 0 에서는 여전히 정확히 0 이다.
+ */
+const RISE_LEAD = 1.3;
+
 const ACT_LEAD = 0.26;
 const ACT_IN = 0.12;
 const ACT_OUT = 0.8;
@@ -1966,8 +1976,8 @@ function inkBoxes(el: Element, q: QuietEl, r: DOMRect): void {
  * 구웠더니 675점이 자리를 못 얻고 흩어졌고, 그러면 "글자가 차가 된다"가 아니라
  * "글자의 4분의 1이 사라진다"가 된다.
  */
-const GLYPH_MAX = 4200;
-const GLYPH_MAX_MOBILE = 1800;
+const GLYPH_MAX = 8000;
+const GLYPH_MAX_MOBILE = 5000;
 /**
  * 우리 차로 대열이 받는 몫. 워드마크(MAIA)가 여기로 가고 나머지 글은 옆 차로다.
  * 대열은 5대뿐이라 몫을 더 주면 받을 자리가 없어 그대로 흩어져 사라진다.
@@ -1984,8 +1994,8 @@ const GLYPH_LANE_SHARE = 0.45;
  * 아래끝(3.2px)은 16px 본문 한 글자에 점 6개가 남는 선이다: 더 벌리면 한 줄이
  * 풀리는 것이 아니라 점 몇 개가 흩어지는 것으로 보인다.
  */
-const GLYPH_STEP = 3.8;
-const GLYPH_STEP_MIN = 2.4;
+const GLYPH_STEP = 2.7;
+const GLYPH_STEP_MIN = 1.75;
 /** 획으로 치는 픽셀 피복률 문턱. 이보다 옅으면 안티에일리어싱 가장자리다. */
 const GLYPH_INK = 0.3;
 /**
@@ -2011,12 +2021,15 @@ const GLYPH_START_PX = 16;
  * 걸쳐 보내는 계단)을 서른 프레임 남짓에 편다. 도로가 아니라 **글자 연출만**
  * 이 완충을 쓴다 — "스크롤이 곧 주행"은 도로의 규칙이다.
  */
-const HP_TAU = 0.3;
+const HP_TAU = 0.36;
 
 /** 도착 상한. hp = 1 에서는 **전부** 자리 잡아 있어야 한다. */
 const GLYPH_END = 0.97;
-/** 글자 점의 화면 크기(px). 차에 다가가며 차체 점 크기로 자란다. */
-const GLYPH_PS = 1.6;
+/**
+ * 글자 점의 화면 크기(px). **공중에서는 끝까지 이 크기다.**
+ * 작고 많아야 점이 면으로 읽힌다 — 2px 짜리 사각형이 성기게 떠 있으면 블록이다.
+ */
+const GLYPH_PS = 1;
 /** 비행 경로가 도로 쪽으로 처지는 정도(화면 높이 대비, 중간에서 최대). */
 const GLYPH_SAG = 0.04;
 /**
@@ -2062,9 +2075,15 @@ const GLYPH_FLASH_GAIN = 0.2;
 const GLYPH_FLASH_SWAP = 0.5;
 /** 조립 순서에 주는 흔들림 — 완벽한 평면 스윕은 기계적으로 보인다. */
 const GLYPH_ORD_JITTER = 0.06;
+/**
+ * 한 자리에 겹쳐 내려앉을 수 있는 점의 수. 차 한 대의 템플릿 점이 ≈300 이라
+ * 10대로도 3,000자리뿐인데 글자 점은 만 단위다 — 여러 겹으로 받아야 첫 화면의
+ * 글이 성긴 격자가 아니라 **면**으로 읽힌다. 여분은 닿기 직전에 스러진다.
+ */
+const GLYPH_DUP_MAX = 6;
 /** 수렴 전 드리프트(px) — 글자가 **자기 자리에서** 풀어지는 정도. 가로·세로. */
-const GLYPH_DRIFT_X = 16;
-const GLYPH_DRIFT_Y = 30;
+const GLYPH_DRIFT_X = 45;
+const GLYPH_DRIFT_Y = 70;
 /**
  * 글자 점이 켜지는 구간(**치환 구간 대비** 비율). 치환보다 조금 빨리 끝난다 —
  * DOM 글자가 마지막으로 옅어지는 동안 점은 이미 다 켜져 있어야, 글자가 꺼지는
@@ -2200,10 +2219,10 @@ function bakeGlyphs(
   const g = off.getContext("2d", { willReadFrequently: true });
   if (!g) return null;
 
-  /* 모바일은 성기게 — 다만 1.7배로 벌렸더니 워드마크가 74점밖에 안 돼서 글자가
-     풀리는 것이 아니라 점 몇 개가 흩어지는 것으로 보였다. 1.2배가 상한(900점)
-     안에 들어오면서 형태가 남는 지점이다. */
-  const stepK = mobile ? 1.2 : 1;
+  /* 모바일도 같은 간격으로 표본한다. 화면이 작아 글자도 작으므로 점 수는 저절로
+     3분의 1이 된다(약 4,000점) — 30fps 예산 안이고, 성기게 벌리면 글자가 풀리는
+     것이 아니라 점 몇 개가 흩어지는 것으로 보인다(1.7배에서 74점까지 떨어졌었다). */
+  const stepK = 1;
 
   /** 무리별 수집함 — [문서x, 문서y, 알파, 버킷] */
   const bag: Record<string, number[][]> = { lane: [], next: [] };
@@ -2291,7 +2310,7 @@ function bakeGlyphs(
             dst.push([
               x0 + px - rootLeft,
               y0 + py - rootTop,
-              Math.min(1, 0.42 + cov * 0.62),
+              Math.min(1, 0.74 + cov * 0.34),
               bucket,
             ]);
           }
@@ -3492,7 +3511,7 @@ export function usePointCloud(
              오른다. 0.85 였을 때는 **스크롤 0 에서 이미 rise 0.09** 였다: 첫 화면이
              대시캠이 아니라 어중간하게 떠 있는 시점으로 시작했다(검사기가 잡았다).
              여는 화면이 정확히 한 화면이라 그 앞에 여유가 없다. */
-          smooth(clamp01((actT[0]! + 0.62) / 0.62)) *
+          smooth(clamp01((actT[0]! + RISE_LEAD) / RISE_LEAD)) *
           (1 - smooth(clamp01((actT[ACTS - 1]! - 0.78) / 0.72)));
     const stageOn = riseK;
 
@@ -3591,9 +3610,20 @@ export function usePointCloud(
      */
     const stageK = Math.min(1, wsum) * riseK;
     const inv = wsum > 1e-4 ? 1 / wsum : 0;
-    const camYBase = CAM_Y_DASH + (aY * inv - CAM_Y_DASH) * stageK;
-    const horizon = HORIZON_DASH + (aHor * inv - HORIZON_DASH) * stageK;
-    const fovK = 0.7 + (aFov * inv - 0.7) * stageK;
+    /* **시점은 `riseK` 하나만 따른다.** `stageK` 는 `min(1, wsum)·riseK` 라, 막이
+       화면의 30% 선에 다가서야 오르는 `wsum`(ACT_LEAD 0.26 + ACT_IN 0.12 ≈ 330px)
+       에 상승이 통째로 갇혀 있었다 — 실측으로 camY 가 스크롤 200px 만에
+       1.8m → 8.4m 로 솟았고, 그래서 **연구가 다른 화면으로 잘려 들어오는 것**으로
+       보였다(교수님 지적). 막이 아직 아무도 안 섰을 때는 첫 막의 구도를 목표로
+       삼는다 — 그래야 `riseK` 가 도는 내내 갈 곳이 있다.
+       `back`·`panK` 는 그대로 `stageK` 다: 자차가 보이는 것과 좌우 팬은 **그 막의**
+       구도이지 시점 상승이 아니다. */
+    const mixY = wsum > 1e-4 ? aY * inv : ACT_CAM[0]!.y;
+    const mixHor = wsum > 1e-4 ? aHor * inv : ACT_CAM[0]!.horizon;
+    const mixFov = wsum > 1e-4 ? aFov * inv : ACT_CAM[0]!.fov;
+    const camYBase = CAM_Y_DASH + (mixY - CAM_Y_DASH) * riseK;
+    const horizon = HORIZON_DASH + (mixHor - HORIZON_DASH) * riseK;
+    const fovK = 0.7 + (mixFov - 0.7) * riseK;
     const panK = aPan * inv * stageK;
 
     // 소실점을 오른쪽으로 밀어 왼쪽에 타이포 공간을 연다(넓은 화면에서만).
@@ -4270,12 +4300,18 @@ export function usePointCloud(
       if (flash > 0) a *= 1 + GLYPH_FLASH_GAIN * flash;
       /* LOD 밖의 자리는 앉자마자 꺼진다. 그래야 인계에서 `drawCar` 가 찍는 lod
          개의 점과 **정확히 같은 집합**이 남는다. */
-      if (spare) a *= 1 - smooth(clamp01((cExt - 0.92) / (0.08 + GLYPH_FLASH)));
+      /* 여분(한 자리에 겹쳐 내려앉는 점·LOD 밖 자리)은 **닿기 직전에 스러진다.**
+         그래야 넓게 퍼진 무리가 차로 **압축**되는 것으로 읽히고, 마지막에 같은
+         자리에 겹쳐 쌓여 밝은 덩어리가 되지 않는다. */
+      if (spare) a *= 1 - smooth(clamp01((cExt - 0.72) / 0.28));
       if (a < 0.05) return;
       if (a > 1) a = 1;
 
-      const psF = GLYPH_PS + (size * inv - GLYPH_PS) * c;
-      let ps = (psF + 0.5) | 0;
+      /* **공중에서는 크기가 자라지 않는다.** 예전에는 `size·inv` 로 보간해서,
+         카메라에 가까운 차로 가는 점이 비행 중반에 벌써 4~6px 짜리 회색 사각형이
+         됐다 — 스캔한 점이 아니라 블록이 떠다니는 것으로 보였다. 공중의 점은
+         1px 이고, 차체 점 크기가 되는 것은 **앉은 뒤**다(그 경로는 `emit`). */
+      let ps = c >= 1 ? ((size * inv + 0.5) | 0) : GLYPH_PS;
       if (ps < 1) ps = 1;
       else if (ps > 9) ps = 9;
 
@@ -4513,39 +4549,50 @@ export function usePointCloud(
         aCar = 1;
       }
 
-      /* 글자가 앉는 동안에는 **LOD 밖까지** 그린다(`gN` 이 lod 보다 클 수 있다).
-         그 점들은 도착 직전에 꺼지므로 hp = 1 의 인계에는 남지 않는다. */
-      const jMax = gN > lod ? gN : lod;
-      for (let j = 0; j < jMax; j++) {
+      /* **한 자리에 여러 점이 내려앉는다.** 차 한 대의 자리는 템플릿 점 수(≈300)
+         뿐인데 글자 점은 만 단위다 — 자리에 맞춰 점을 줄이면 첫 화면이 성긴
+         격자가 되고("점들이 훨씬 작고 더 많이 퍼져서 압도되면 좋겠어"), 자리를
+         못 얻은 점을 버리면 글자의 대부분이 도로에 닿지 않는다. 그래서 같은
+         자리로 `dup` 개가 함께 내려오고, **닿기 직전에 여분이 스러진다** — 넓게
+         퍼진 무리가 차로 압축되는 것으로 읽힌다. */
+      const dup = gN > 0 ? Math.ceil(gN / tpl.n) : 1;
+      const used = gN > 0 ? Math.min(tpl.n, Math.ceil(gN / dup)) : 0;
+      for (let m = 0; m < gN; m++) {
+        const j = (m / dup) | 0;
+        if (j >= tpl.n) break;
         const lx = tpl.lx[j]!;
         const lz = tpl.lz[j]!;
-        const wx = baseX + lx * cth + lz * sth;
-        const wy = baseY + tpl.ly[j]!;
-        const wdz = dz0 - lx * sth + lz * cth;
-        const bkt = braking && tpl.lamp[j] ? RAMP_BUCKETS - 1 : tpl.bucket[j]!;
-        if (j < gN) {
-          /* 차 안의 순서는 **뒤에서 앞으로**(카메라에 가까운 면부터) — 스캐너가
-             훑듯이 쌓인다. 그래서 조립 중인 차는 흐릿한 전체가 아니라 **반쪽이
-             또렷하고 반쪽이 없는** 모습이 된다. 흔들림을 조금 섞어 기계적인
-             평면 스윕이 되지 않게 한다. */
-          const jit =
-            (((j * 1103515245 + 12345) & 0xffff) / 65535 - 0.5) *
-            GLYPH_ORD_JITTER;
-          const o = ord0 + ordK * clamp01(tpl.ordz[j]! + jit);
-          glyphEmit(
-            wx,
-            wy,
-            wdz,
-            bkt,
-            tpl.baseA[j]! * aCar,
-            tpl.sw[j]!,
-            gOff + j,
-            o,
-            j >= lod,
-          );
-        } else if (j < lod) {
-          emit(wx, wy, wdz, bkt, tpl.baseA[j]! * aRest, tpl.sw[j]!, true);
-        }
+        /* 차 안의 순서는 **뒤에서 앞으로**(카메라에 가까운 면부터) — 스캐너가
+           훑듯이 쌓인다. 그래서 조립 중인 차는 흐릿한 전체가 아니라 **반쪽이
+           또렷하고 반쪽이 없는** 모습이 된다. 흔들림을 조금 섞어 기계적인 평면
+           스윕이 되지 않게 한다. */
+        const jit = (((m * 1103515245 + 12345) & 0xffff) / 65535 - 0.5) * GLYPH_ORD_JITTER;
+        glyphEmit(
+          baseX + lx * cth + lz * sth,
+          baseY + tpl.ly[j]!,
+          dz0 - lx * sth + lz * cth,
+          braking && tpl.lamp[j] ? RAMP_BUCKETS - 1 : tpl.bucket[j]!,
+          tpl.baseA[j]! * aCar,
+          tpl.sw[j]!,
+          gOff + m,
+          ord0 + ordK * clamp01(tpl.ordz[j]! + jit),
+          // 한 자리의 **첫 점만** 남는다. 나머지와 LOD 밖 자리는 닿기 전에 스러진다.
+          m !== j * dup || j >= lod,
+        );
+      }
+      // 글자를 못 받은 자리는 평범한 차체 점이다.
+      for (let j = used; j < lod; j++) {
+        const lx = tpl.lx[j]!;
+        const lz = tpl.lz[j]!;
+        emit(
+          baseX + lx * cth + lz * sth,
+          baseY + tpl.ly[j]!,
+          dz0 - lx * sth + lz * cth,
+          braking && tpl.lamp[j] ? RAMP_BUCKETS - 1 : tpl.bucket[j]!,
+          tpl.baseA[j]! * aRest,
+          tpl.sw[j]!,
+          true,
+        );
       }
       // 도로 위에 실제로 몸통을 올린 차만 센다 — 글자만 들고 있는 차는 아직
       // 차가 아니다(검사기가 "도착 전 빈 도로"를 이 값으로 잰다).
@@ -4577,7 +4624,7 @@ export function usePointCloud(
        * 것이 없다. 자리를 못 얻어 사라지는 것보다 촘촘한 차가 낫다.
        * LOD 밖의 점은 도착 직전(e 0.9→1)에 꺼져 인계가 매끄럽다(`drawCar`).
        */
-      const seatsOf = (tpl: CarTemplate): number => tpl.n;
+      const seatsOf = (tpl: CarTemplate): number => tpl.n * GLYPH_DUP_MAX;
       /** 대열 k번째 차의 후면 깊이(m). `drawCar` 에 넘기는 값과 같다. */
       const laneDz = (k: number): number => {
         const veh = vehicles[k];
