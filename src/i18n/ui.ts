@@ -91,15 +91,25 @@ export const UI = {
   sectionTeaching: { en: 'Teaching', ko: '강의' },
 
   // People
-  principalInvestigator: { en: 'Principal Investigator', ko: '지도교수' },
+  /* 직함 줄에 이어 붙는다(`Assistant Professor · Principal Investigator`).
+     한글은 `지도교수` 가 아니라 `연구책임자` 다 — 바로 아래 학력 항목의
+     `advisor`(지도교수)와 같은 낱말이면 두 뜻이 한 화면에서 겹친다. */
+  principalInvestigator: { en: 'Principal Investigator', ko: '연구책임자' },
+  /* 부임 시점. 붙는 자리가 언어마다 달라(`Since 2026.03` / `2026.03 부임`)
+     한 낱말만 두고 순서는 쓰는 쪽이 정한다. */
+  since: { en: 'Since', ko: '부임' },
   members: { en: 'Members', ko: '연구실 구성원' },
   alumni: { en: 'Alumni', ko: '졸업생' },
   education: { en: 'Education', ko: '학력' },
   experience: { en: 'Experience', ko: '경력' },
   advisor: { en: 'Advisor', ko: '지도교수' },
+  /* 빈 구성원 칸의 사실 한 줄. 예전 문안의 둘째 문장("이곳에 연구원들이 소개될
+     예정입니다")은 자리를 채우려는 말이지 사실이 아니라 뺐다 — 빈칸을 설명하는
+     문장이 곧 AI 가 쓴 표식이다. 모집 안내는 교수님 문안(`SITE.recruiting`)이
+     바로 아래에 있다. */
   membersEmpty: {
-    en: 'The lab was founded in March 2026 and is assembling its first cohort. This is where our researchers will be listed.',
-    ko: '2026년 3월에 문을 연 신생 연구실로, 첫 구성원을 모집하고 있습니다. 이곳에 연구원들이 소개될 예정입니다.',
+    en: 'MAIA Lab opened in March 2026 and is recruiting its first members.',
+    ko: '2026년 3월에 문을 연 연구실로, 첫 구성원을 모집하고 있습니다.',
   },
 
   // Publications

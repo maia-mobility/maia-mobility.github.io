@@ -4,17 +4,20 @@
  *
  * 이 페이지는 데이터가 가장 적다(한 학기 · 세 과목).
  *
- *   · 왼쪽 기둥은 **학부/대학원 구분**이다. 한동안 `01 02 03` 이 거기 있었는데,
- *     한 학기에 나란히 열리는 세 과목에는 순서가 없다 — 번호가 행에서 가장 큰
- *     글자이면서 아무것도 알려 주지 않았다. 같은 자리에 구분 표기를 세우니
- *     여백이 정보를 나르고, 오른쪽 끝에 홀로 떠 있던 꼬리표도 없어졌다.
- *     논문의 연도 레일·소식의 날짜 레일과 같은 어휘다.
  *   · 학기가 이 페이지의 가장 큰 글이다. 과목 제목이 아니라 **언제**가 먼저다 —
  *     강의 목록은 시간표이고, 학기가 바뀌면 목록이 통째로 바뀐다.
+ *   · 학기 아래는 **수준별 묶음**이다. `UNDERGRADUATE ·········` 한 줄이 그
+ *     묶음을 열고, 과목이 그 아래로 내려간다 — 논문 페이지의 종류 스트립과
+ *     같은 어휘다.
+ *
+ * 행마다 왼쪽 기둥에 `UNDERGRADUATE` 가 서 있었다. 세 행의 값이 전부 같으니
+ * 그 칸은 정보를 나르지 않고 가로만 먹었다(같은 낱말이 세 번). 묶음의 머리로
+ * 한 번만 세우면, 대학원 과목이 생기는 날 묶음이 저절로 둘이 된다.
+ * 학기 옆의 과목 수(`03`)도 지웠다 — 세 줄짜리 목록이 스스로 세어 준다.
  *
  * 글은 전부 `src/data/teaching.ts` 의 것이다.
  */
-import { byTerm } from '../data/teaching';
+import { byTerm, type Course, type Level } from '../data/teaching';
 import { pick, type Lang } from '../i18n';
 import { UI } from '../i18n/ui';
 
@@ -24,9 +27,18 @@ interface Props {
 const { lang } = Astro.props;
 
 const t = (v: Parameters<typeof pick>[0]) => pick(v, lang);
-const nn = (n: number) => String(n).padStart(2, '0');
 
 const TERMS = byTerm();
+
+/** 수준 라벨. 묶음의 머리로 한 번만 선다. */
+const LEVEL_LABEL = { undergraduate: UI.undergraduate, graduate: UI.graduate };
+
+/** 한 학기를 수준별로 나눈다. 빈 묶음은 머리를 세우지 않는다. */
+const LEVELS: Level[] = ['undergraduate', 'graduate'];
+const byLevel = (courses: Course[]) =>
+  LEVELS.map((level) => ({ level, courses: courses.filter((c) => c.level === level) })).filter(
+    (g) => g.courses.length > 0
+  );
 ---
 
 <div class="page">
@@ -37,31 +49,28 @@ const TERMS = byTerm();
   {
     TERMS.map((g) => (
       <section class="term" data-quiet>
-        <div class="termHead">
-          <h2 class="termName">{t(g.term)}</h2>
-          <p class="ann termCount">
-            <span class="rule" aria-hidden="true" />
-            {nn(g.courses.length)}
-          </p>
-        </div>
+        <h2 class="termName">{t(g.term)}</h2>
 
-        <ol class="manifest">
-          {g.courses.map((c) => (
-            <li>
-              <span class="level">
-                {t(c.level === 'graduate' ? UI.graduate : UI.undergraduate)}
-              </span>
+        {byLevel(g.courses).map((lv) => (
+          <div class="lvl">
+            <h3 class="strip">
+              <span class="stripLabel">{t(LEVEL_LABEL[lv.level])}</span>
+              <span class="rule" aria-hidden="true" />
+            </h3>
 
-              <div class="entry">
-                <h3 class="cTitle">{t(c.title)}</h3>
-                <p class="cMeta">
-                  <span>{t(c.program)}</span>
-                  {c.note ? <span class="note">{t(c.note)}</span> : null}
-                </p>
-              </div>
-            </li>
-          ))}
-        </ol>
+            <ol class="manifest">
+              {lv.courses.map((c) => (
+                <li>
+                  <p class="cTitle">{t(c.title)}</p>
+                  <p class="cMeta">
+                    <span>{t(c.program)}</span>
+                    {c.note ? <span class="note">{t(c.note)}</span> : null}
+                  </p>
+                </li>
+              ))}
+            </ol>
+          </div>
+        ))}
       </section>
     ))
   }
@@ -73,15 +82,6 @@ const TERMS = byTerm();
     inline-size: min(100%, 62rem);
     padding-inline: var(--gutter);
     padding-block-end: var(--space-9);
-  }
-
-  .ann {
-    margin: 0;
-    font-family: var(--font-mono);
-    font-size: var(--t-micro);
-    line-height: var(--lh-mono);
-    letter-spacing: var(--track-mono);
-    color: var(--fg-mute);
   }
 
   /* ---- 머리 ----------------------------------------------------------- */
@@ -102,12 +102,8 @@ const TERMS = byTerm();
   /* ---- 학기 ----------------------------------------------------------- */
   .term {
     display: grid;
-    gap: var(--space-5);
+    gap: var(--space-4);
     padding-block-end: var(--space-8);
-  }
-  .termHead {
-    display: grid;
-    gap: var(--space-2);
   }
   .termName {
     margin: 0;
@@ -118,13 +114,38 @@ const TERMS = byTerm();
     letter-spacing: -0.03em;
     color: var(--fg);
   }
-  /* 과목 수는 학기의 계측값이다 — 점선이 왼쪽에서 달려와 숫자에서 멈춘다. */
-  .termCount {
+  /* ---- 수준 묶음 ------------------------------------------------------- */
+  .lvl {
+    display: grid;
+    gap: var(--space-2);
+  }
+  .lvl + .lvl {
+    margin-block-start: var(--space-5);
+  }
+  /*
+   * 라벨 → 점선. 논문 페이지의 종류 스트립과 같은 줄이다. 선을 글자 뒤에서
+   * 시작하므로 라벨 뒤에 깔 불투명 면이 필요 없다(면을 깔면 도로가 잘린다).
+   */
+  .strip {
+    margin: 0;
     display: flex;
     align-items: center;
     gap: 0.7em;
-    color: var(--fg-dim);
-    font-variant-numeric: tabular-nums;
+    font-family: var(--font-mono);
+    font-size: var(--t-micro);
+    font-weight: var(--w-mono);
+    line-height: var(--lh-mono);
+    letter-spacing: var(--track-label);
+    text-transform: uppercase;
+    color: var(--fg-mute);
+  }
+  /*
+   * 모노 계측 라벨 안의 한글. 모노 글꼴에는 한글이 없어 본문 글꼴로 떨어지는데,
+   * 라틴 대문자용으로 잡은 넓은 트래킹(0.18em)이 그대로 걸리면 글자가 흩어진다
+   * (`학부` 가 `학 부` 로 읽혔다). global.css 의 `.mono:lang(ko)` 와 같은 값으로.
+   */
+  .strip:lang(ko) {
+    letter-spacing: 0.04em;
   }
   .rule {
     flex: 1 1 auto;
@@ -142,26 +163,14 @@ const TERMS = byTerm();
   }
   .manifest li {
     display: grid;
-    grid-template-columns: 9rem minmax(0, 1fr);
-    align-items: baseline;
-    gap: var(--space-4);
-    padding-block: var(--space-4);
+    gap: var(--space-1);
+    min-inline-size: 0;
+    padding-block: var(--space-3);
   }
   .manifest li + li {
     border-block-start: var(--hair) dotted var(--scan);
   }
 
-  /*
-   * 번호. 홈의 잘려 나가는 번호와 같은 어휘지만 여기서는 흐름 안에 선다 —
-   * 굵기를 가장 얇게, 광도는 헤어라인 한 단계 위로. 읽으라고 둔 것이 아니라
-   * 행의 무게를 잡으라고 둔 것이다.
-   */
-
-  .entry {
-    display: grid;
-    gap: var(--space-1);
-    min-inline-size: 0;
-  }
   .cTitle {
     margin: 0;
     font-family: var(--font-sans);
@@ -192,45 +201,17 @@ const TERMS = byTerm();
     color: var(--line-hot);
   }
 
-  /* 학부/대학원 — 오른쪽 여백의 모노 표기. 칩이 아니다. */
-  .level {
-    justify-self: start;
-    font-family: var(--font-mono);
-    font-size: var(--t-micro);
-    line-height: var(--lh-mono);
-    letter-spacing: var(--track-label);
-    text-transform: uppercase;
-    color: var(--fg-mute);
-    white-space: nowrap;
-  }
-  /*
-   * 모노 계측 라벨 안의 한글. 모노 글꼴에는 한글이 없어 본문 글꼴로 떨어지는데,
-   * 라틴 대문자용으로 잡은 넓은 트래킹(0.18em)이 그대로 걸리면 글자가 흩어진다
-   * (`학부` 가 `학 부` 로 읽혔다). global.css 의
-   * `.mono:lang(ko)` 와 같은 값으로 되돌린다.
-   */
-  .level:lang(ko) {
-    letter-spacing: 0.04em;
-  }
-
   /* ---- 좁은 화면 ------------------------------------------------------ */
   @media (max-width: 48rem) {
     .lead {
       /* 위쪽 120px — 고정 색인이 좁은 화면에서 두세 줄로 접히면 바닥이 100px 까지 내려온다. 80px 이면 제목 위에 얹혔다(실측). */
       padding-block: var(--space-9) var(--space-6);
     }
-    /*
-     * 세 칸을 두 칸으로 줄인다 — 번호 칸은 남기고(행의 뼈대다) 구분 표기만
-     * 본문 아래로 내린다. 390px 에서 세 칸이면 제목이 한 줄에 22자였다.
-     */
     .manifest li {
-      /* 좁은 화면에서는 기둥을 접고 구분 표기를 제목 위에 올린다. */
-      grid-template-columns: minmax(0, 1fr);
-      gap: var(--space-1);
-      padding-block: var(--space-3);
+      padding-block: var(--space-2);
     }
     .term {
-      gap: var(--space-4);
+      gap: var(--space-3);
       padding-block-end: var(--space-7);
     }
   }

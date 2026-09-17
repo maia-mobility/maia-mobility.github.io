@@ -5,15 +5,22 @@
  * 홈의 소식 구역은 날짜 레일 옆에 제목이 본문 크기로 붙는 **목록**이다. 여기는
  * 전체 소식이라 목록이 아니라 **기사**로 읽혀야 한다:
  *
- *   · 연도가 왼쪽 여백에 큰 숫자로 서서 그 해의 소식이 끝날 때까지 따라온다
- *     (sticky). 소식이 쌓이면 이 숫자가 페이지의 눈금이 된다.
- *   · 날짜는 `08.25` 로 **월·일만** 찍는다 — 연도는 왼쪽 숫자가 이미 말한다.
- *   · 제목이 이 페이지에서 가장 큰 글이다. 소식은 제목이 곧 내용이라,
- *     제목을 본문 크기로 눕히면 목록 한 줄과 구분되지 않는다.
+ *   · 연도가 왼쪽 열의 머리에 큰 숫자로 서고, **그 아래로 월·일이 열을 이룬다**
+ *     (`08.25`). 소식이 쌓이면 이 열이 페이지의 눈금이 된다.
+ *   · 제목이 그 옆에 선다. 소식은 제목이 곧 내용이라, 본문 크기로 눕히면 목록
+ *     한 줄과 구분되지 않는다.
+ *
+ * 제목 위에 `08.25  GRANT` 한 줄이 눈썹줄로 얹혀 있었다. 날짜는 정보라 왼쪽
+ * 열로 내려보냈고 — 거기서는 여러 기사의 날짜가 세로로 줄을 서서 **언제**가
+ * 한눈에 읽힌다 — 분류(`GRANT`·`LAB`)는 지웠다. 소식 두 건에 분류가 둘이면
+ * 그 라벨은 나누는 일을 하지 않는다. 제목 옆의 건수(`02`)도 같은 이유로 지웠다.
+ *
+ * 연도는 붙어 따라오지 않는다(sticky 아님). 이제 그 열에 날짜가 서 있어서,
+ * 따라오는 숫자가 날짜 위를 지나가기 때문이다.
  *
  * 글은 전부 `src/data/news.ts` 의 것이다.
  */
-import { NEWS, NEWS_KIND_LABEL } from '../data/news';
+import { NEWS } from '../data/news';
 import { pick, type Lang } from '../i18n';
 import { UI } from '../i18n/ui';
 
@@ -23,7 +30,6 @@ interface Props {
 const { lang } = Astro.props;
 
 const t = (v: Parameters<typeof pick>[0]) => pick(v, lang);
-const nn = (n: number) => String(n).padStart(2, '0');
 
 /** ISO `2026-08-25` → `08.25`. 연도는 묶음의 큰 숫자가 이미 말한다. */
 const monthDay = (iso: string) => iso.slice(5).replace('-', '.');
@@ -41,7 +47,6 @@ const YEARS = NEWS.reduce<{ year: string; items: typeof NEWS }[]>((acc, n) => {
 <div class="page">
   <header class="lead" data-quiet>
     <h1 class="title">{t(UI.sectionNews)}</h1>
-    <p class="tally">{nn(NEWS.length)}</p>
   </header>
 
   {
@@ -52,15 +57,14 @@ const YEARS = NEWS.reduce<{ year: string; items: typeof NEWS }[]>((acc, n) => {
         <ol class="feed">
           {g.items.map((n) => (
             <li>
-              <p class="meta">
-                <time class="when" datetime={n.date}>
-                  {monthDay(n.date)}
-                </time>
-                <span class="kind">{t(NEWS_KIND_LABEL[n.kind])}</span>
-              </p>
+              <time class="when" datetime={n.date}>
+                {monthDay(n.date)}
+              </time>
 
-              <h2 class="nTitle">{t(n.title)}</h2>
-              {n.body ? <p class="nBody">{t(n.body)}</p> : null}
+              <div class="entry">
+                <h2 class="nTitle">{t(n.title)}</h2>
+                {n.body ? <p class="nBody">{t(n.body)}</p> : null}
+              </div>
             </li>
           ))}
         </ol>
@@ -79,9 +83,6 @@ const YEARS = NEWS.reduce<{ year: string; items: typeof NEWS }[]>((acc, n) => {
 
   /* ---- 머리 ----------------------------------------------------------- */
   .lead {
-    display: flex;
-    align-items: baseline;
-    gap: var(--space-4);
     padding-block: var(--space-9) var(--space-8);
   }
   .title {
@@ -93,39 +94,22 @@ const YEARS = NEWS.reduce<{ year: string; items: typeof NEWS }[]>((acc, n) => {
     letter-spacing: -0.042em;
     color: var(--fg);
   }
-  .tally {
-    margin: 0;
-    font-family: var(--font-mono);
-    font-size: var(--t-micro);
-    line-height: var(--lh-mono);
-    letter-spacing: var(--track-mono);
-    color: var(--fg-dim);
-    font-variant-numeric: tabular-nums;
-  }
-
   /* ---- 연도 묶음 ------------------------------------------------------- */
   .year {
     display: grid;
-    grid-template-columns: 9rem minmax(0, 1fr);
-    gap: var(--space-5);
+    gap: var(--space-4);
     padding-block-end: var(--space-8);
   }
 
-  /*
-   * 연도는 여백에 붙어 그 해의 소식이 끝날 때까지 따라온다. 붙는 높이는 전역
-   * `scroll-padding-block-start` 와 같은 값이어야 앵커 이동과 어긋나지 않는다.
-   */
+  /* 연도는 날짜 열의 머리다 — 같은 왼쪽 기준선에서 시작해 아래로 월·일이 선다. */
   .yearMark {
-    position: sticky;
-    inset-block-start: var(--space-8);
-    align-self: start;
     margin: 0;
     font-family: var(--font-sans);
     font-size: clamp(2rem, 1.2rem + 2.6vw, 3.2rem);
     font-weight: var(--w-thin);
     line-height: 1;
     letter-spacing: -0.04em;
-    color: var(--line-hot);
+    color: var(--fg-dim);
     font-variant-numeric: tabular-nums;
   }
 
@@ -136,9 +120,11 @@ const YEARS = NEWS.reduce<{ year: string; items: typeof NEWS }[]>((acc, n) => {
     display: grid;
     min-inline-size: 0;
   }
+  /* 날짜가 왼쪽 열에 서고 기사가 그 옆으로 흐른다 — 논문의 연도 레일과 같은 행. */
   .feed li {
     display: grid;
-    gap: var(--space-2);
+    grid-template-columns: 9rem minmax(0, 1fr);
+    gap: var(--space-5);
     padding-block: var(--space-5);
   }
   .feed li:first-child {
@@ -147,49 +133,32 @@ const YEARS = NEWS.reduce<{ year: string; items: typeof NEWS }[]>((acc, n) => {
   .feed li + li {
     border-block-start: var(--hair) dotted var(--scan);
   }
-
-  /* 날짜와 종류 — 기사 머리의 계측 표기 한 줄. */
-  .meta {
-    margin: 0;
-    display: flex;
-    align-items: baseline;
-    gap: 1.2em;
+  .when {
     font-family: var(--font-mono);
-    font-size: var(--t-micro);
-    line-height: var(--lh-mono);
-    letter-spacing: var(--track-mono);
+    font-size: var(--t-mono-sm);
+    line-height: var(--lh-2);
+    letter-spacing: var(--track-mono-read);
+    color: var(--fg-mute);
     font-variant-numeric: tabular-nums;
   }
-  .when {
-    color: var(--fg-mute);
-  }
-  .kind {
-    letter-spacing: var(--track-label);
-    text-transform: uppercase;
-    color: var(--fg-mute);
-  }
-  /*
-   * 모노 계측 라벨 안의 한글. 모노 글꼴에는 한글이 없어 본문 글꼴로 떨어지는데,
-   * 라틴 대문자용으로 잡은 넓은 트래킹(0.18em)이 그대로 걸리면 글자가 흩어진다
-   * (`연구과제` 가 `연 구 과 제` 로 읽혔다). global.css 의
-   * `.mono:lang(ko)` 와 같은 값으로 되돌린다.
-   */
-  .kind:lang(ko) {
-    letter-spacing: 0.04em;
+  .entry {
+    display: grid;
+    min-inline-size: 0;
   }
 
   /*
-   * 제목이 이 페이지의 디스플레이다. 소식은 제목이 곧 내용이라, 목록 한 줄로
-   * 눕히면 무엇이 일어났는지가 읽히지 않는다.
+   * 제목은 기사의 머리이지 이 페이지의 디스플레이가 아니다. 32px 까지 키웠더니
+   * 공지 한 줄이 아니라 슬로건으로 읽혔다 — 한 단 내리고, 본문과의 단 차이는
+   * 크기와 광도 양쪽으로 그대로 둔다.
    */
   .nTitle {
     margin: 0;
-    max-inline-size: 34ch;
+    max-inline-size: 46ch;
     font-family: var(--font-sans);
-    font-size: clamp(1.25rem, 0.95rem + 1.1vw, 1.9rem);
-    font-weight: var(--w-light);
-    line-height: 1.18;
-    letter-spacing: -0.022em;
+    font-size: var(--t-lg);
+    font-weight: var(--w-regular);
+    line-height: var(--lh-2);
+    letter-spacing: -0.015em;
     color: var(--fg);
     text-wrap: pretty;
   }
@@ -209,21 +178,19 @@ const YEARS = NEWS.reduce<{ year: string; items: typeof NEWS }[]>((acc, n) => {
       padding-block: var(--space-9) var(--space-5);
     }
     /*
-     * 연도 칸(144px)이 390px 에서 가로의 절반 가까이를 먹는다. 한 열로 접고
-     * 연도를 기사 위에 올린다 — 여백에 세우던 눈금이 묶음의 머리글이 된다.
-     * sticky 도 푼다. 한 열에서 붙여 두면 숫자가 제목 위를 지나간다.
+     * 날짜 칸(144px)이 390px 에서 가로의 절반 가까이를 먹는다 — 행을 세로로
+     * 접어 날짜를 제목 위에 올린다(논문 레일과 같은 규칙).
      */
     .year {
-      grid-template-columns: minmax(0, 1fr);
       gap: var(--space-3);
       padding-block-end: var(--space-7);
     }
     .yearMark {
-      position: static;
       font-size: var(--t-h4);
-      color: var(--fg-dim);
     }
     .feed li {
+      grid-template-columns: minmax(0, 1fr);
+      gap: var(--space-1);
       padding-block: var(--space-4);
     }
   }
