@@ -1,6 +1,6 @@
-import { useEffect, useRef, type RefObject } from 'react';
-import { useCanvas2D, type Canvas2DView } from './useCanvas2D';
-import { useRafLoop } from './useRafLoop';
+import { useEffect, useRef, type RefObject } from "react";
+import { useCanvas2D, type Canvas2DView } from "./useCanvas2D";
+import { useRafLoop } from "./useRafLoop";
 import {
   FS_DEFAULT,
   PRESETS,
@@ -9,8 +9,8 @@ import {
   step,
   type IDMParams,
   type Vehicle,
-} from '../lib/idm';
-import { PLATOON } from '../lib/scenarios';
+} from "../lib/idm";
+import { PLATOON } from "../lib/scenarios";
 
 /* ============================================================================
    usePointCloud — LiDAR 로 스캔한 정밀도로지도를 Canvas 2D 로 절차적 재생성한다.
@@ -63,13 +63,21 @@ function parseHexToken(raw: string): RGB | null {
 }
 
 function readToken(name: string): RGB {
-  if (typeof window === 'undefined') return NEUTRAL;
+  if (typeof window === "undefined") return NEUTRAL;
   const raw = getComputedStyle(document.documentElement).getPropertyValue(name);
   return parseHexToken(raw) ?? NEUTRAL;
 }
 
 /** LiDAR intensity 램프 (global.css §2.1). 낮은 강도 → 높은 강도. */
-const RAMP_TOKENS = ['--i-0', '--i-1', '--i-2', '--i-3', '--i-4', '--i-5', '--i-6'] as const;
+const RAMP_TOKENS = [
+  "--i-0",
+  "--i-1",
+  "--i-2",
+  "--i-3",
+  "--i-4",
+  "--i-5",
+  "--i-6",
+] as const;
 
 /**
  * intensity 버킷. 0‥10 = 램프 보간, 11 = `--fg` (수목·폴의 흰색 반사),
@@ -128,9 +136,9 @@ function buildPalette(): Palette {
       Math.round(a[2] + (c[2] - a[2]) * k),
     ]);
   }
-  colors.push(readToken('--fg'));
+  colors.push(readToken("--fg"));
   // 잉크 버킷은 베이크 때 실제 글자 색으로 덮인다. 그때까지는 `--fg` 로 둔다.
-  for (let i = 0; i < INK_SLOTS; i++) colors.push(readToken('--fg'));
+  for (let i = 0; i < INK_SLOTS; i++) colors.push(readToken("--fg"));
 
   const core: string[] = new Array(BINS);
   const halo: string[] = new Array(BINS);
@@ -144,7 +152,7 @@ function buildPalette(): Palette {
     }
   }
 
-  const bg = readToken('--bg');
+  const bg = readToken("--bg");
   return { core, halo, bg: `rgb(${bg[0]},${bg[1]},${bg[2]})` };
 }
 
@@ -213,7 +221,8 @@ const W1 = TWO_PI / SCENE_LEN;
  * 도로의 평면 선형. SCENE_LEN 을 정확히 한 주기로 갖는 사인의 합이라
  * wrap 지점에서 도로가 끊기지 않는다. 곡률 ≈ 0.008/m (R ≈ 125m) — 도심 완곡선.
  */
-const curveX = (z: number): number => 5 * Math.sin(z * W1) + 1.3 * Math.sin(z * W1 * 2 + 1.1);
+const curveX = (z: number): number =>
+  5 * Math.sin(z * W1) + 1.3 * Math.sin(z * W1 * 2 + 1.1);
 /** 평면 선형의 기울기 — 차량 요(yaw)를 도로에 맞추는 데 쓴다. */
 const curveDx = (z: number): number =>
   5 * W1 * Math.cos(z * W1) + 2.6 * W1 * Math.cos(z * W1 * 2 + 1.1);
@@ -233,10 +242,12 @@ function mulberry32(seed: number): () => number {
 }
 
 /** 씬 좌표계(0…SCENE_LEN)로 되접는다. 카메라가 되접히므로 연출 좌표도 같이 접어야 한다. */
-const wrapScene = (z: number): number => z - Math.floor(z / SCENE_LEN) * SCENE_LEN;
+const wrapScene = (z: number): number =>
+  z - Math.floor(z / SCENE_LEN) * SCENE_LEN;
 
 /** 부드러운 계단 — 카메라 상승·차량 등장에 쓴다. 선형으로 올리면 멀미난다. */
-const smooth = (t: number): number => (t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t));
+const smooth = (t: number): number =>
+  t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t);
 const clamp01 = (t: number): number => (t < 0 ? 0 : t > 1 ? 1 : t);
 
 interface Scene {
@@ -303,7 +314,14 @@ function buildScene(budget: number): Scene {
   const ba: number[] = [];
   const sw: number[] = [];
 
-  const put = (x: number, y: number, z: number, bucket: number, alpha: number, size: number) => {
+  const put = (
+    x: number,
+    y: number,
+    z: number,
+    bucket: number,
+    alpha: number,
+    size: number,
+  ) => {
     xs.push(x + curveX(z));
     ys.push(y + curveY(z));
     zs.push(z);
@@ -320,7 +338,8 @@ function buildScene(budget: number): Scene {
     const side = rnd() < 0.5 ? -1 : 1;
     const x = side * (1 + rnd() * 7.2);
     // 바퀴 궤적(wheel path) 근처는 반사가 조금 높다 — 실제 노면의 광택 띠.
-    const lane = Math.abs(Math.abs(x) - 2.8) < 0.55 || Math.abs(Math.abs(x) - 6.2) < 0.55;
+    const lane =
+      Math.abs(Math.abs(x) - 2.8) < 0.55 || Math.abs(Math.abs(x) - 6.2) < 0.55;
     let intensity = 0.08 + rnd() * 0.2 + (lane ? 0.06 : 0);
     if (rnd() < 0.05) intensity = 0.36 + rnd() * 0.18; // 보수 패치·맨홀
     put(x, rnd() * 0.012, z, toBucket(intensity), 0.5 + rnd() * 0.24, 0.046);
@@ -337,7 +356,14 @@ function buildScene(budget: number): Scene {
     // 보도블록 줄눈이 가끔 세게 튄다 — 균일한 회색 판이 아니다.
     const seam = rnd() < 0.07;
     const intensity = seam ? 0.26 + rnd() * 0.1 : 0.08 + rnd() * 0.15;
-    put(x, 0.17 + rnd() * 0.03, z, toBucket(intensity), 0.42 + rnd() * 0.2, 0.046);
+    put(
+      x,
+      0.17 + rnd() * 0.03,
+      z,
+      toBucket(intensity),
+      0.42 + rnd() * 0.2,
+      0.046,
+    );
   }
 
   /* --- ② 차선 도색 -------------------------------------------------- */
@@ -357,7 +383,14 @@ function buildScene(budget: number): Scene {
   const curbStep = hi ? 1 : 2.4;
   for (let z = 0; z < SCENE_LEN; z += curbStep) {
     // 중앙분리대 상면 + 양 측면
-    put((rnd() * 2 - 1) * 0.75, 0.15 + rnd() * 0.012, z, toBucket(0.3 + rnd() * 0.12), 0.6, 0.05);
+    put(
+      (rnd() * 2 - 1) * 0.75,
+      0.15 + rnd() * 0.012,
+      z,
+      toBucket(0.3 + rnd() * 0.12),
+      0.6,
+      0.05,
+    );
     put(-0.75, rnd() * 0.15, z, toBucket(0.44), 0.62, 0.05);
     put(0.75, rnd() * 0.15, z, toBucket(0.44), 0.62, 0.05);
   }
@@ -424,7 +457,14 @@ function buildScene(budget: number): Scene {
   for (const ry of railY) {
     for (let z = 0; z < SCENE_LEN; z += railStep) {
       for (let s = -1; s <= 1; s += 2) {
-        put(s * 0.55, ry + (rnd() - 0.5) * 0.02, z, toBucket(0.52 + rnd() * 0.12), 0.66, 0.05);
+        put(
+          s * 0.55,
+          ry + (rnd() - 0.5) * 0.02,
+          z,
+          toBucket(0.52 + rnd() * 0.12),
+          0.66,
+          0.05,
+        );
       }
     }
   }
@@ -439,7 +479,14 @@ function buildScene(budget: number): Scene {
   const shoulderRailStep = hi ? 0.95 : 2.2;
   for (let z = 0; z < SCENE_LEN; z += shoulderRailStep) {
     for (let s = -1; s <= 1; s += 2) {
-      put(s * 8.62, 0.62 + (rnd() - 0.5) * 0.03, z, toBucket(0.48 + rnd() * 0.1), 0.6, 0.05);
+      put(
+        s * 8.62,
+        0.62 + (rnd() - 0.5) * 0.03,
+        z,
+        toBucket(0.48 + rnd() * 0.1),
+        0.6,
+        0.05,
+      );
     }
   }
   const postStep = hi ? 4 : 9;
@@ -447,7 +494,14 @@ function buildScene(budget: number): Scene {
   for (let z = 2; z < SCENE_LEN; z += postStep) {
     for (let s = -1; s <= 1; s += 2) {
       for (let j = 0; j < postN; j++) {
-        put(s * 8.62, 0.06 + (j / postN) * 0.56, z, toBucket(0.42), 0.62, 0.048);
+        put(
+          s * 8.62,
+          0.06 + (j / postN) * 0.56,
+          z,
+          toBucket(0.42),
+          0.62,
+          0.048,
+        );
       }
     }
   }
@@ -459,7 +513,14 @@ function buildScene(budget: number): Scene {
   for (let s = -1; s <= 1; s += 2) {
     for (let x = 1.25; x < 7.85; x += stopDx) {
       for (let k = 0; k < 2; k++) {
-        put(s * x, 0.014, JZ + k * 0.24, toBucket(0.96 + rnd() * 0.04), 0.86, 0.06);
+        put(
+          s * x,
+          0.014,
+          JZ + k * 0.24,
+          toBucket(0.96 + rnd() * 0.04),
+          0.86,
+          0.06,
+        );
       }
     }
   }
@@ -471,7 +532,14 @@ function buildScene(budget: number): Scene {
     if (Math.abs(bx) < 1.05) continue; // 중앙분리대 구간은 비운다
     for (let ox = 0; ox < 0.46; ox += zebraDx) {
       for (let z = 0; z < 5; z += zebraDz) {
-        put(bx + ox, 0.014, JZ + 1.6 + z, toBucket(0.9 + rnd() * 0.09), 0.84, 0.058);
+        put(
+          bx + ox,
+          0.014,
+          JZ + 1.6 + z,
+          toBucket(0.9 + rnd() * 0.09),
+          0.84,
+          0.058,
+        );
       }
     }
   }
@@ -488,7 +556,14 @@ function buildScene(budget: number): Scene {
         const t = k / 4;
         const halfW = 0.55 * (1 - t);
         for (let ox = -halfW; ox <= halfW + 1e-6; ox += 0.16) {
-          put(lane + ox, 0.014, az + 2.4 + t * 0.85, toBucket(0.93), 0.84, 0.058);
+          put(
+            lane + ox,
+            0.014,
+            az + 2.4 + t * 0.85,
+            toBucket(0.93),
+            0.84,
+            0.058,
+          );
         }
       }
     }
@@ -517,7 +592,14 @@ function buildScene(budget: number): Scene {
     if (hi) {
       for (let k = 0; k < 24; k++) {
         const t = k / 23;
-        put(-9.6 + t * 19.2, k % 2 ? 6.1 : 6.55, gz + 0.1, toBucket(0.4), 0.5, 0.048);
+        put(
+          -9.6 + t * 19.2,
+          k % 2 ? 6.1 : 6.55,
+          gz + 0.1,
+          toBucket(0.4),
+          0.5,
+          0.048,
+        );
       }
     }
     // 표지판 — 재귀반사 시트라 최고강도. 좌우 차도에 번갈아 건다.
@@ -526,9 +608,17 @@ function buildScene(budget: number): Scene {
     for (let x = 1.2; x < 5.4; x += panelStep) {
       for (let y = 4.7; y < 5.95; y += panelStep) {
         // 테두리(재귀반사 시트)가 판면보다 세게 돌아온다. 완벽한 격자는 CG 로 보인다.
-        const edge = x < 1.2 + panelStep || y < 4.7 + panelStep || y > 5.95 - panelStep;
+        const edge =
+          x < 1.2 + panelStep || y < 4.7 + panelStep || y > 5.95 - panelStep;
         const jz = (rnd() - 0.5) * 0.05;
-        put(sgn * x, y + jz, gz + 0.05 + jz, toBucket(edge ? 0.88 : 0.66), 0.78, 0.056);
+        put(
+          sgn * x,
+          y + jz,
+          gz + 0.05 + jz,
+          toBucket(edge ? 0.88 : 0.66),
+          0.78,
+          0.056,
+        );
       }
     }
   }
@@ -573,7 +663,14 @@ function buildScene(budget: number): Scene {
       put(px, (j / poleN) * 7.5, z, WHITE, 0.5, 0.045);
     }
     for (let j = 0; j < armN; j++) {
-      put(px - side * (j / armN) * 2.2, 7.5 - (j / armN) * 0.5, z, WHITE, 0.5, 0.045);
+      put(
+        px - side * (j / armN) * 2.2,
+        7.5 - (j / armN) * 0.5,
+        z,
+        WHITE,
+        0.5,
+        0.045,
+      );
     }
   }
 
@@ -581,7 +678,14 @@ function buildScene(budget: number): Scene {
   const wallStep = hi ? 1.2 : 2.6;
   for (let z = 0; z < SCENE_LEN; z += wallStep) {
     for (let s = -1; s <= 1; s += 2) {
-      put(s * (14.6 + rnd() * 1.3), rnd() * 2.2, z, WHITE, 0.22 + rnd() * 0.12, 0.045);
+      put(
+        s * (14.6 + rnd() * 1.3),
+        rnd() * 2.2,
+        z,
+        WHITE,
+        0.22 + rnd() * 0.12,
+        0.045,
+      );
     }
   }
 
@@ -598,7 +702,10 @@ function buildScene(budget: number): Scene {
     for (let z = 0; z < depth; z += facadeDz) {
       for (let y = 1.2; y < top; y += facadeDy) {
         // 층마다 밝기가 조금씩 다르다 — 창이 켜진 정도
-        const a = 0.14 + ((b * 7 + Math.round(y)) % 3 === 0 ? 0.16 : 0.04) + rnd() * 0.08;
+        const a =
+          0.14 +
+          ((b * 7 + Math.round(y)) % 3 === 0 ? 0.16 : 0.04) +
+          rnd() * 0.08;
         put(fx, y, (z0 + z) % SCENE_LEN, WHITE, a, 0.045);
       }
     }
@@ -714,7 +821,9 @@ function buildRelLayer(budget: number): RelLayer {
     x[k] = side * (road ? 0.9 + rnd() * 7.3 : 8.4 + rnd() * 7.5);
     y[k] = road ? rnd() * 0.012 : 0.17 + rnd() * 0.03;
     const lane =
-      road && (Math.abs(Math.abs(x[k]) - 2.8) < 0.55 || Math.abs(Math.abs(x[k]) - 6.2) < 0.55);
+      road &&
+      (Math.abs(Math.abs(x[k]) - 2.8) < 0.55 ||
+        Math.abs(Math.abs(x[k]) - 6.2) < 0.55);
     let intensity = 0.08 + rnd() * 0.2 + (lane ? 0.06 : 0);
     if (rnd() < 0.05) intensity = 0.36 + rnd() * 0.18;
     bucket[k] = toBucket(intensity);
@@ -861,6 +970,8 @@ interface CarTemplate {
   baseA: Float32Array;
   /** 1 = 제동등. 감속 중이면 최고강도로 점등한다. */
   lamp: Uint8Array;
+  /** 차체 **뒤끝 0 → 앞끝 1**. 글자 점이 쌓이는 순서다(스캐너가 훑듯이). */
+  ordz: Float32Array;
   /** 점이 대표하는 실제 크기(m) */
   sw: Float32Array;
 }
@@ -880,10 +991,10 @@ interface CarViews {
  * 그래야 멀어서 앞쪽 40점만 쓰는 차도 **고르게 성긴 스캔**으로 보인다 —
  * 순서대로 자르면 지붕만 있고 옆면이 없는 반쪽 차가 된다.
  */
-function buildCar(shape: CarShape, view: 'rear' | 'front'): CarTemplate {
+function buildCar(shape: CarShape, view: "rear" | "front"): CarTemplate {
   const { len, wid, roof, belt, roofZ, nose, sill } = shape;
   const hw = wid / 2;
-  const rnd = mulberry32(view === 'rear' ? 0x0a17 : 0x0b23);
+  const rnd = mulberry32(view === "rear" ? 0x0a17 : 0x0b23);
 
   // 핵심(항상 먼저) / 표면(섞어서 뒤에)
   const key: number[][] = [];
@@ -926,7 +1037,7 @@ function buildCar(shape: CarShape, view: 'rear' | 'front'): CarTemplate {
     }
   };
 
-  if (view === 'rear') {
+  if (view === "rear") {
     /* ── 후미등 — 재귀반사. 100m 밖에서도 이것부터 돌아온다. ── */
     for (const s of [-1, 1]) {
       plane(
@@ -943,7 +1054,18 @@ function buildCar(shape: CarShape, view: 'rear' | 'front'): CarTemplate {
       );
     }
     /* ── 번호판 — 재귀반사 시트. 차에서 가장 밝은 한 점. ── */
-    plane(key, -0.17, 0.17, 0, 0.15, (u, v) => [u, sill + 0.16 + v, 0.03], 0.97, 1, 0.96, 0.07);
+    plane(
+      key,
+      -0.17,
+      0.17,
+      0,
+      0.15,
+      (u, v) => [u, sill + 0.16 + v, 0.03],
+      0.97,
+      1,
+      0.96,
+      0.07,
+    );
     /* ── 후면 윤곽 — 차폭과 차고를 세우는 뼈대.
           **도장면과 같은 낮은 반사강도로 둔다.** 실제 차체 도장은 빔을 거의 되돌리지
           않는다 — 여기를 밝게 잡으면 차가 스캔된 물체가 아니라 형광 테두리를 두른
@@ -960,7 +1082,17 @@ function buildCar(shape: CarShape, view: 'rear' | 'front'): CarTemplate {
     }
 
     /* ── 테일게이트 면 ── */
-    plane(body, -hw + 0.04, hw - 0.04, sill, belt, (u, v) => [u, v, 0], 0.16, 0.3, 0.78);
+    plane(
+      body,
+      -hw + 0.04,
+      hw - 0.04,
+      sill,
+      belt,
+      (u, v) => [u, v, 0],
+      0.16,
+      0.3,
+      0.78,
+    );
     /* ── 후면 유리 — 빔이 통과한다. 점이 거의 돌아오지 않는 것이 유리의 서명이다. ── */
     plane(
       body,
@@ -976,7 +1108,17 @@ function buildCar(shape: CarShape, view: 'rear' | 'front'): CarTemplate {
       0.72,
     );
     /* ── 범퍼 아래 · 머플러 그늘 ── */
-    plane(body, -hw + 0.1, hw - 0.1, 0.16, sill, (u, v) => [u, v, -0.04], 0.08, 0.18, 0.6);
+    plane(
+      body,
+      -hw + 0.1,
+      hw - 0.1,
+      0.16,
+      sill,
+      (u, v) => [u, v, -0.04],
+      0.08,
+      0.18,
+      0.6,
+    );
   } else {
     /* ── 헤드램프 — 렌즈라 재귀반사만큼은 아니지만 밝다 ── */
     for (const s of [-1, 1]) {
@@ -1013,7 +1155,17 @@ function buildCar(shape: CarShape, view: 'rear' | 'front'): CarTemplate {
       put(key, -hw + t * wid, sill, len - 0.01, 0.24, 0.92, 0.1);
     }
     /* ── 라디에이터 그릴 — 격자라 반사가 산란한다 ── */
-    plane(body, -hw + 0.06, hw - 0.06, sill, nose - 0.04, (u, v) => [u, v, len], 0.12, 0.34, 0.8);
+    plane(
+      body,
+      -hw + 0.06,
+      hw - 0.06,
+      sill,
+      nose - 0.04,
+      (u, v) => [u, v, len],
+      0.12,
+      0.34,
+      0.8,
+    );
     /* ── 앞유리 — 후면 유리와 같은 이유로 성기다 ── */
     plane(
       body,
@@ -1138,8 +1290,16 @@ function buildCar(shape: CarShape, view: 'rear' | 'front'): CarTemplate {
     bucket: new Uint8Array(n),
     baseA: new Float32Array(n),
     lamp: new Uint8Array(n),
+    ordz: new Float32Array(n),
     sw: new Float32Array(n),
   };
+  let zLo = Infinity;
+  let zHi = -Infinity;
+  for (const p of all) {
+    if (p[2]! < zLo) zLo = p[2]!;
+    if (p[2]! > zHi) zHi = p[2]!;
+  }
+  const zK = 1 / Math.max(0.01, zHi - zLo);
   for (let i = 0; i < n; i++) {
     const p = all[i]!;
     t.lx[i] = p[0]!;
@@ -1149,6 +1309,7 @@ function buildCar(shape: CarShape, view: 'rear' | 'front'): CarTemplate {
     t.baseA[i] = p[4]!;
     t.sw[i] = p[5]!;
     t.lamp[i] = p[6]!;
+    t.ordz[i] = (p[2]! - zLo) * zK;
   }
   return t;
 }
@@ -1156,8 +1317,8 @@ function buildCar(shape: CarShape, view: 'rear' | 'front'): CarTemplate {
 function buildCars(): CarViews[] {
   return SHAPES.map((shape) => ({
     shape,
-    rear: buildCar(shape, 'rear'),
-    front: buildCar(shape, 'front'),
+    rear: buildCar(shape, "rear"),
+    front: buildCar(shape, "front"),
   }));
 }
 
@@ -1192,7 +1353,15 @@ function buildPed(): PedTemplate {
   const pa: number[] = [];
   const ps: number[] = [];
   const pl: number[] = [];
-  const put = (x: number, y: number, z: number, i: number, a: number, s: number, limb = 0) => {
+  const put = (
+    x: number,
+    y: number,
+    z: number,
+    i: number,
+    a: number,
+    s: number,
+    limb = 0,
+  ) => {
     px.push(x);
     py.push(y);
     pz.push(z);
@@ -1220,12 +1389,26 @@ function buildPed(): PedTemplate {
   for (let i = 0; i < 46; i++) {
     const t = rnd();
     const th = rnd() * TWO_PI;
-    put(0.2 * Math.cos(th), 0.92 + t * 0.53, 0.13 * Math.sin(th), 0.07 + rnd() * 0.15, 0.76, 0.085);
+    put(
+      0.2 * Math.cos(th),
+      0.92 + t * 0.53,
+      0.13 * Math.sin(th),
+      0.07 + rnd() * 0.15,
+      0.76,
+      0.085,
+    );
   }
   // 어깨 — 몸통 위를 가로지르는 띠. 실루엣의 폭을 만든다.
   for (let i = 0; i <= 8; i++) {
     const u = -0.22 + (i / 8) * 0.44;
-    put(u, 1.42 + (rnd() - 0.5) * 0.03, (rnd() - 0.5) * 0.16, 0.1 + rnd() * 0.12, 0.78, 0.09);
+    put(
+      u,
+      1.42 + (rnd() - 0.5) * 0.03,
+      (rnd() - 0.5) * 0.16,
+      0.1 + rnd() * 0.12,
+      0.78,
+      0.09,
+    );
   }
   // 팔 — 몸통 양옆으로 흐르는 두 줄
   for (const s of [-1, 1]) {
@@ -1246,7 +1429,15 @@ function buildPed(): PedTemplate {
   for (const s of [-1, 1]) {
     for (let i = 0; i < 14; i++) {
       const t = i / 13;
-      put(s * 0.1, 0.9 - t * 0.86, (rnd() - 0.5) * 0.08, 0.06 + rnd() * 0.12, 0.68, 0.085, s);
+      put(
+        s * 0.1,
+        0.9 - t * 0.86,
+        (rnd() - 0.5) * 0.08,
+        0.06 + rnd() * 0.12,
+        0.68,
+        0.085,
+        s,
+      );
     }
     // 신발 반사띠 — 가끔 세게 튄다
     put(s * 0.1, 0.045, 0.04, 0.72 + rnd() * 0.22, 0.9, 0.08, s);
@@ -1809,22 +2000,13 @@ const GLYPH_INK = 0.3;
  * **비율이 아니라 px 다.** 휠 한 칸이 100px 남짓이니 150px 이면 한두 칸이다.
  * 비율로 두면 여는 화면 길이를 바꿀 때마다 체감 속도가 같이 변한다.
  */
-const GLYPH_HOLD_PX = 150;
+const GLYPH_HOLD_PX = 250;
 /**
  * 치환이 시작되는 스크롤(px). 첫 화면이 **붙어 있는** 동안 도는 연출이라 글자
  * 위치와 무관하다 — 손가락을 한 번 굴리면 바로 시작한다.
  */
 const GLYPH_START_PX = 16;
-/**
- * **비행 구간의 길이(스크롤 px).** 점-글자가 풀려 차에 닿기까지. 트랙패드로 한 번,
- * 휠로 서너 칸이다 — 치환 66 + 비행 110px 이었을 때 "전환이 너무 빠르다"였다.
- */
-const GLYPH_FLY_PX = 300;
-/**
- * 이산 구간 안의 시차 — 점-글자가 **위에서부터** 풀린다(남은 구간 대비 비율).
- * 치환 구간에는 걸리지 않고, 기준은 요소가 아니라 **첫 화면 전체의 세로 위치**다.
- */
-const GLYPH_STAGGER = 0.34;
+
 /** 도착 상한. hp = 1 에서는 **전부** 자리 잡아 있어야 한다. */
 const GLYPH_END = 0.97;
 /** 글자 점의 화면 크기(px). 차에 다가가며 차체 점 크기로 자란다. */
@@ -1832,18 +2014,39 @@ const GLYPH_PS = 1.6;
 /** 비행 경로가 도로 쪽으로 처지는 정도(화면 높이 대비, 중간에서 최대). */
 const GLYPH_SAG = 0.04;
 /**
- * **수렴이 시작되는 지점(비행 진행도 e).** 이 앞에서는 점이 글자 자리에 머물며
- * 풀어지기만 하고, 뒤의 짧은 구간에서 한꺼번에 차로 모인다.
- *
- * 없을 때 무슨 일이 났는가: 위치를 `smooth(e)` 로 이으면 비행 중반에 점이 이미
- * 목표의 절반 거리에 와 있다. 먼 차는 화면에서 20px 남짓이라 그 차로 가는 수백
- * 점의 궤적이 중반에 벌써 좁게 모여 **도착 전에 차 윤곽이 보인다**(교수님이 그
- * 화면을 잡았다). 도로는 도착 직전까지 비어 있어야 한다.
- *
- * 색 갈아타기·포그·감쇠·크기도 전부 이 수렴 진행도를 따른다 — 공중에 떠 있는
- * 점이 차체 색을 띠면 그것도 같은 이유로 "이미 차가 있다"로 읽힌다.
+ * **풀어지는 구간의 길이(스크롤 px).** 치환이 끝난 점-글자가 제자리에서 흐트러진다.
+ * 여기까지는 아직 아무도 떠나지 않는다.
  */
-const GLYPH_CONV = 0.68;
+const GLYPH_LOOSEN_PX = 100;
+/**
+ * **조립 구간의 길이(스크롤 px).** 점마다 **출발 시각이 이 구간 전체에 흩뿌려진다**.
+ *
+ * 한때는 비행 마지막 32%에 다 같이 수렴시켰다. "도착 전 유령 없음"은 지켜졌지만
+ * 보통 스크롤 속도에서 그 100px 를 한 번에 지나쳐 **차가 되는 과정이 아예 빠졌다**
+ * (교수님: "여기서 차량이 되는 과정이 아예 빠져 있어"). 출발을 흩뿌리면 어느
+ * 프레임을 잘라도 글자 자리에 남은 점 · 공중의 줄기 · 앉은 점이 함께 보인다.
+ */
+const GLYPH_ASM_PX = 500;
+/** **한 점**이 글자에서 차까지 가는 거리(스크롤 px). 짧아야 줄기가 보인다. */
+const GLYPH_FLY_ONE_PX = 80;
+/**
+ * 모바일의 구간 배율. 데스크톱 기준(치환 250 · 풀어짐 100 · 조립 500 → 도착 866px)
+ * 은 한 화면이 844px 인 전화에서 한 화면을 넘는다. 터치 한 번이 400~600px 이니
+ * 0.7배면 도착이 611px — 손가락 한두 번이다.
+ */
+const GLYPH_MOBILE_K = 0.7;
+/** 앉는 순간의 번쩍임 — 비행 길이 대비. 0.10 ≈ 스크롤 8px */
+const GLYPH_FLASH = 0.1;
+/**
+ * 번쩍임의 밝기 이득. 색은 **글자의 잉크 버킷 그대로** 쓴다 — `--fg` 버킷(11)로
+ * 올리면 후광(halo)이 붙어 3px 짜리 흰 덩어리가 되고, 조립 중인 차가 차가 아니라
+ * 하얗게 끓는 덩어리로 보인다(실측 스크린샷).
+ */
+const GLYPH_FLASH_GAIN = 0.45;
+/** 이만큼 잦아들면 차체 색으로 넘어간다. */
+const GLYPH_FLASH_SWAP = 0.5;
+/** 조립 순서에 주는 흔들림 — 완벽한 평면 스윕은 기계적으로 보인다. */
+const GLYPH_ORD_JITTER = 0.06;
 /** 수렴 전 드리프트(px) — 글자가 **자기 자리에서** 풀어지는 정도. 가로·세로. */
 const GLYPH_DRIFT_X = 16;
 const GLYPH_DRIFT_Y = 30;
@@ -1881,17 +2084,7 @@ interface Glyphs {
   a: Float32Array;
   /** 잉크 버킷 */
   b: Uint8Array;
-  /** 출발 진행도(hp) */
-  d: Float32Array;
-  /** 1 / 전체 구간 */
-  k: Float32Array;
-  /** 이 점의 이산 구간이 시작되는 지점(= 요소 치환 구간 + 그 점의 시차). */
-  hold: Float32Array;
-  /** 1 / (1 − hold). 이산 진행도를 한 번의 곱으로 구한다. */
-  mv: Float32Array;
-  /** 잉크 버킷에서 차체 버킷으로 갈아타는 지점(**수렴** 진행도 c) */
-  sw: Float32Array;
-  /** 수렴 전 드리프트 방향·세기 −1…1 */
+  /** 드리프트 방향·세기 −1…1. 조립 순서의 흔들림도 여기서 나온다. */
   dr: Float32Array;
   /** 우리 차로 대열이 받을 구간 [시작, 개수] */
   laneOff: number;
@@ -1901,14 +2094,23 @@ interface Glyphs {
   nextN: number;
   /** 실제로 쓰인 잉크 색 — 팔레트의 잉크 버킷을 이 색으로 채운다. */
   colors: RGB[];
-  /**
-   * 전 글자 공통 일정 — 시작 hp · 1/구간 · 치환 몫 · 1/(1−치환).
-   * 도로가 차오르는 시점을 이 하나로 잰다(시차 0 기준).
-   */
+  /* --- 전 글자 공통 일정(hp). 점마다 다른 것은 **조립 순서** 하나뿐이다. --- */
+  /** 치환이 시작되는 hp */
   t0: number;
-  tk: number;
-  h0: number;
-  m0: number;
+  /** 1 / 치환 길이 */
+  subK: number;
+  /** 풀어지기가 시작되는 hp(= 치환 끝) */
+  loose0: number;
+  /** 1 / 풀어지기 길이 */
+  looseK: number;
+  /** 조립이 시작되는 hp(= 가장 먼저 떠나는 점) */
+  asm0: number;
+  /** 출발이 흩뿌려지는 폭 — 순서 1 인 점은 `asm0 + asmSpread` 에 떠난다 */
+  asmSpread: number;
+  /** 1 / 한 점의 비행 길이 */
+  flyK: number;
+  /** 마지막 점이 앉는 hp */
+  done: number;
 }
 
 /** `rgb(240, 240, 242)` · `rgb(240 240 242 / .5)` 에서 앞의 세 수만 본다. */
@@ -1954,22 +2156,27 @@ function bakeGlyphs(
   rootLeft: number,
   rootTop: number,
 ): Glyphs | null {
-  const els = [...document.querySelectorAll<HTMLElement>('[data-ink]')];
+  const els = [...document.querySelectorAll<HTMLElement>("[data-ink]")];
   if (!els.length) return null;
 
   // 무리 순서를 고정한다 — 앞에 오는 글이 앞에 오는 차를 받는다.
-  const order = ['lane', 'next'];
-  els.sort((a, b) => order.indexOf(a.dataset.ink ?? 'next') - order.indexOf(b.dataset.ink ?? 'next'));
+  const order = ["lane", "next"];
+  els.sort(
+    (a, b) =>
+      order.indexOf(a.dataset.ink ?? "next") -
+      order.indexOf(b.dataset.ink ?? "next"),
+  );
 
   let maxFs = 0;
-  for (const el of els) maxFs = Math.max(maxFs, Number.parseFloat(getComputedStyle(el).fontSize));
+  for (const el of els)
+    maxFs = Math.max(maxFs, Number.parseFloat(getComputedStyle(el).fontSize));
   if (!(maxFs > 0)) return null;
 
   const side = Math.min(1024, Math.max(64, Math.ceil(maxFs * 2.7)));
-  const off = document.createElement('canvas');
+  const off = document.createElement("canvas");
   off.width = side;
   off.height = side;
-  const g = off.getContext('2d', { willReadFrequently: true });
+  const g = off.getContext("2d", { willReadFrequently: true });
   if (!g) return null;
 
   /* 모바일은 성기게 — 다만 1.7배로 벌렸더니 워드마크가 74점밖에 안 돼서 글자가
@@ -1985,17 +2192,19 @@ function bakeGlyphs(
   const sched: HTMLElement[] = [];
 
   for (const el of els) {
-    const group = el.dataset.ink === 'lane' ? 'lane' : 'next';
+    const group = el.dataset.ink === "lane" ? "lane" : "next";
     const cs = getComputedStyle(el);
     const box = el.getBoundingClientRect();
-    if (box.width <= 0 || box.height <= 0 || cs.visibility === 'hidden') continue;
+    if (box.width <= 0 || box.height <= 0 || cs.visibility === "hidden")
+      continue;
 
     const fs = Number.parseFloat(cs.fontSize);
-    const step = Math.max(GLYPH_STEP_MIN, Math.min(GLYPH_STEP, fs / 30)) * stepK;
+    const step =
+      Math.max(GLYPH_STEP_MIN, Math.min(GLYPH_STEP, fs / 30)) * stepK;
     const padX = Math.ceil(fs * 0.45) + 2;
     const padY = Math.ceil(fs * 0.55) + 2;
     g.font = `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize}/${cs.lineHeight} ${cs.fontFamily}`;
-    g.textBaseline = 'alphabetic';
+    g.textBaseline = "alphabetic";
     // 표본하는 것은 **알파 채널**(획의 피복률)이라 색은 무엇이든 된다. 그래도
     // 그 글자가 실제로 쓰는 색을 그대로 쓴다 — 훅에 색을 적어 두지 않는다.
     g.fillStyle = cs.color;
@@ -2003,7 +2212,11 @@ function bakeGlyphs(
     // 이 요소의 잉크 버킷 — 같은 색이면 같은 버킷을 쓴다.
     const rgb = parseRgb(cs.color) ?? NEUTRAL;
     let slot = colors.findIndex(
-      (c) => Math.abs(c[0] - rgb[0]) + Math.abs(c[1] - rgb[1]) + Math.abs(c[2] - rgb[2]) < 12,
+      (c) =>
+        Math.abs(c[0] - rgb[0]) +
+          Math.abs(c[1] - rgb[1]) +
+          Math.abs(c[2] - rgb[2]) <
+        12,
     );
     if (slot < 0) {
       if (colors.length < INK_SLOTS) {
@@ -2022,10 +2235,10 @@ function bakeGlyphs(
     const dst = bag[group]!;
     const range = document.createRange();
     for (let node = walker.nextNode(); node; node = walker.nextNode()) {
-      const text = node.nodeValue ?? '';
+      const text = node.nodeValue ?? "";
       for (let i = 0; i < text.length; i++) {
         const ch = text[i]!;
-        if (ch === ' ' || ch === '\n' || ch === '\t' || ch === ' ') continue;
+        if (ch === " " || ch === "\n" || ch === "\t" || ch === " ") continue;
         range.setStart(node, i);
         range.setEnd(node, i + 1);
         const r = range.getClientRects()[0];
@@ -2034,7 +2247,8 @@ function bakeGlyphs(
         const m = g.measureText(ch);
         // 인라인 상자의 half-leading 모델 — 글줄 높이 안에 글꼴 상자를 가운데 둔다.
         const baseline =
-          (r.height - (m.fontBoundingBoxAscent + m.fontBoundingBoxDescent)) / 2 +
+          (r.height - (m.fontBoundingBoxAscent + m.fontBoundingBoxDescent)) /
+            2 +
           m.fontBoundingBoxAscent;
 
         const bw = Math.min(side, Math.ceil(r.width) + padX * 2);
@@ -2079,21 +2293,25 @@ function bakeGlyphs(
 
      길이는 **비율이 아니라 스크롤 px** 다(`GLYPH_START_PX`·`GLYPH_HOLD_PX`·
      `GLYPH_FLY_PX`). 비율로 잡으면 창 크기마다 체감 속도가 달라진다. */
+  const kPx = mobile ? GLYPH_MOBILE_K : 1;
+  const holdPx = GLYPH_HOLD_PX * kPx;
+  const flyPx = GLYPH_FLY_ONE_PX * kPx;
   const startHp = GLYPH_START_PX / vh;
-  const tHold = (GLYPH_START_PX + GLYPH_HOLD_PX) / vh;
-  const arrive = Math.min(GLYPH_END, (GLYPH_START_PX + GLYPH_HOLD_PX + GLYPH_FLY_PX) / vh);
-  const run = Math.max(0.02, arrive - startHp);
-  const hold = Math.min(0.9, Math.max(0.05, (tHold - startHp) / run));
+  const loosePx = GLYPH_START_PX + holdPx;
+  const asmPx = loosePx + GLYPH_LOOSEN_PX * kPx;
+  // 출발은 조립 구간에 흩뿌리되, 마지막 점의 비행까지 그 안에 들어가야 한다.
+  const spreadPx = Math.max(10, GLYPH_ASM_PX * kPx - flyPx);
+  const donePx = asmPx + GLYPH_ASM_PX * kPx;
 
   /* DOM 글자가 꺼지는 구간 = **치환 구간 그 자체**다. 글자가 옅어지는 만큼 같은
      자리의 점이 켜지고, 구간 끝에서 글자는 0 · 점은 만개한다 — 그 순간 화면에
      서 있는 것이 **점으로 찍힌 글자**다. 둘을 따로 두면 안 된다.
      읽기가 전부 끝난 다음에 쓴다. CSS 에는 나눗셈이 아니라 곱셈으로 넘긴다 —
      calc() 의 분모는 수여야 한다. */
-  const inkK = 1 / Math.max(1e-4, run * hold);
+  const inkK = vh / holdPx;
   for (const el of sched) {
-    el.style.setProperty('--ink-at', startHp.toFixed(4));
-    el.style.setProperty('--ink-k', inkK.toFixed(3));
+    el.style.setProperty("--ink-at", startHp.toFixed(4));
+    el.style.setProperty("--ink-k", inkK.toFixed(3));
   }
 
   /* 상한을 넘으면 고르게 솎는다. 무리마다 따로 솎아야 한 무리가 다른 무리의
@@ -2105,18 +2323,6 @@ function bakeGlyphs(
   const n = all.length;
   if (n === 0) return null;
 
-  /* 시차는 **화면 전체의 세로 위치**로 준다. 요소 안에서만 흩으면 다섯 덩이가
-     각각 위아래로 풀려 "덩어리 다섯 개"로 보인다. 첫 화면의 글 전체를 하나의
-     면으로 보고 위에서부터 풀어야 한 장이 벗겨지는 것으로 읽힌다. */
-  let yMin = Number.POSITIVE_INFINITY;
-  let yMax = Number.NEGATIVE_INFINITY;
-  for (const row of all) {
-    const y = row[1]!;
-    if (y < yMin) yMin = y;
-    if (y > yMax) yMax = y;
-  }
-  const ySpan = Math.max(1, yMax - yMin);
-
   const rnd = mulberry32(0x91c5);
   const out: Glyphs = {
     n,
@@ -2124,21 +2330,20 @@ function bakeGlyphs(
     dy: new Float32Array(n),
     a: new Float32Array(n),
     b: new Uint8Array(n),
-    d: new Float32Array(n),
-    k: new Float32Array(n),
-    hold: new Float32Array(n),
-    mv: new Float32Array(n),
     dr: new Float32Array(n),
-    sw: new Float32Array(n),
     laneOff: 0,
     laneN: lane.length,
     nextOff: lane.length,
     nextN: next.length,
     colors,
     t0: startHp,
-    tk: 1 / run,
-    h0: hold,
-    m0: 1 / Math.max(0.05, 1 - hold),
+    subK: vh / holdPx,
+    loose0: loosePx / vh,
+    looseK: vh / (GLYPH_LOOSEN_PX * kPx),
+    asm0: asmPx / vh,
+    asmSpread: spreadPx / vh,
+    flyK: vh / flyPx,
+    done: Math.min(GLYPH_END, donePx / vh),
   };
   for (let i = 0; i < n; i++) {
     const p = all[i]!;
@@ -2146,19 +2351,9 @@ function bakeGlyphs(
     out.dy[i] = p[1]!;
     out.a[i] = p[2]!;
     out.b[i] = p[3]!;
-    /* 일정은 하나다. 점마다 다른 출발을 `d` 에 더해 버리면 치환 구간에도 시차가
-       생겨 글이 통째로 점이 되지 못한다. 시차는 이산 구간이 시작되는 지점에만
-       얹는다 — 도착은 전부 같이 `eRaw` = 1 이다. */
-    const u = (p[1]! - yMin) / ySpan;
-    const lag = GLYPH_STAGGER * (1 - hold) * (0.7 * u + 0.3 * rnd());
-    out.d[i] = startHp;
-    out.k[i] = 1 / run;
-    out.hold[i] = hold + lag;
-    out.mv[i] = 1 / Math.max(0.05, 1 - hold - lag);
-    /* 색을 갈아타는 지점 — 점마다 달라야 "스캔이 다시 분류한 것"으로 읽힌다.
-       늦게 잡는다: 도중에 벌써 차체 색이면 허공에 파란 점 무리가 뜬 것으로 보인다.
-       거의 닿아서 바뀌어야 **글자가 차가 된 것**으로 읽힌다. */
-    out.sw[i] = 0.55 + rnd() * 0.3;
+    /* 일정은 **전 글자가 하나다.** 점마다 다른 것은 조립 순서뿐인데, 그 순서는
+       어느 차의 어느 자리로 가느냐가 정하므로 프레임에서 계산한다(`drawCar`).
+       여기서는 드리프트 방향과 순서의 흔들림만 굽는다. */
     out.dr[i] = rnd() * 2 - 1;
   }
   return out;
@@ -2271,7 +2466,8 @@ const driver = (
 });
 
 /** IDM 평형 차두거리 — 이 값으로 배치해야 출발부터 과도응답이 없다. */
-const equil = (p: IDMParams, v: number, len: number): number => p.s0 + v * p.T + len;
+const equil = (p: IDMParams, v: number, len: number): number =>
+  p.s0 + v * p.T + len;
 
 /** 링 위의 한 줄. 간격은 운전자 차이에서 나오고, 배치도 그 평형에 맞춘다. */
 function seedColumn(
@@ -2302,7 +2498,7 @@ function seedColumn(
   const veh: Vehicle[] = [];
   let pos = 0;
   for (let i = 0; i < count; i++) {
-    veh.push(makeVehicle(i, pos, v0, 'human', params[i]!, 0, lens[i]!));
+    veh.push(makeVehicle(i, pos, v0, "human", params[i]!, 0, lens[i]!));
     pos += gaps[i]! * k;
   }
   return { veh, x, dir, shape, jog };
@@ -2331,7 +2527,7 @@ function buildFleet(): Fleet {
   let x = 0;
   for (let i = 0; i < n; i++) {
     if (i > 0) x += equil(params[i - 1]!, v0, lens[i]!);
-    vehicles.push(makeVehicle(i, x, v0, 'av', params[i]!, 0, lens[i]!));
+    vehicles.push(makeVehicle(i, x, v0, "av", params[i]!, 0, lens[i]!));
   }
 
   /* --- 옆 차로: 사람 운전, 정체류. stop-and-go 파동이 **저절로** 자란다. --- */
@@ -2505,8 +2701,12 @@ export interface RoadProbe {
     swapped: number;
     /** `hp` 의 자(px) — 여는 화면의 실제 길이 */
     span: number;
-    /** 전 글자 공통 일정(스크롤 px) — [치환 시작, 치환 끝, 도착] */
-    t: [number, number, number];
+    /** 전 글자 공통 일정(스크롤 px) — [치환 시작, 치환 끝, 조립 시작, 도착] */
+    t: [number, number, number, number];
+    /** 그린 글자 점의 상태 비율 — 글자 자리 · 공중 · 앉음 (합 1) */
+    stay: number;
+    air: number;
+    land: number;
     /** 이번 프레임에 차에 자리 잡은 점 */
     seated: number;
     /** 자리를 못 얻어 흩어지는 점 */
@@ -2699,7 +2899,9 @@ export function usePointCloud(
     cssV: -1,
     cssA: new Float64Array(ACTS).fill(-1),
     relZ0: Float64Array.from(REL_BANDS.map((_, b) => relLo(b, 2))),
-    relSpan: Float64Array.from(REL_BANDS.map((_, b) => Math.max(0.5, relHi(b, 2) - relLo(b, 2)))),
+    relSpan: Float64Array.from(
+      REL_BANDS.map((_, b) => Math.max(0.5, relHi(b, 2) - relLo(b, 2))),
+    ),
     docRange: 0,
     docAt: -1,
     selfZ: 0,
@@ -2745,8 +2947,8 @@ export function usePointCloud(
   const mobileRef = useRef<boolean | null>(null);
   if (mobileRef.current === null) {
     mobileRef.current =
-      typeof window !== 'undefined' && typeof window.matchMedia === 'function'
-        ? window.matchMedia('(max-width: 900px), (pointer: coarse)').matches
+      typeof window !== "undefined" && typeof window.matchMedia === "function"
+        ? window.matchMedia("(max-width: 900px), (pointer: coarse)").matches
         : false;
   }
   const mobile = mobileRef.current;
@@ -2848,7 +3050,8 @@ export function usePointCloud(
     /** 화면에 동시에 설 수 있는 차량·사람의 상한. 실제로는 LOD 가 훨씬 먼저 자른다. */
     const carMax = Math.max(...cars.map((c) => Math.max(c.rear.n, c.front.n)));
     const actors = FLEET_N + 1 + NEXT_N + ONC_N * 2;
-    const cap = n + rel.n + actors * carMax + PED_N * ped.n + ANNO_CAP + GLYPH_MAX;
+    const cap =
+      n + rel.n + actors * carMax + PED_N * ped.n + ANNO_CAP + GLYPH_MAX;
 
     let buf = bufRef.current;
     if (!buf || buf.vsx.length < cap) {
@@ -2908,7 +3111,10 @@ export function usePointCloud(
     // 문서 높이는 매 프레임 재지 않는다(레이아웃 강제). 0.3초마다 갱신하면 충분하다.
     if (st.docAt < 0 || elapsed - st.docAt > 0.3) {
       st.docAt = elapsed;
-      st.docRange = Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
+      st.docRange = Math.max(
+        1,
+        document.documentElement.scrollHeight - window.innerHeight,
+      );
     }
     const p = clamp01(scrollY / st.docRange);
 
@@ -2920,19 +3126,30 @@ export function usePointCloud(
        `stageP` 는 무대 **안에서의** 진행도(4개 주제가 차례로 펼쳐진다).
        레이아웃 강제를 피하려고 getBoundingClientRect 는 프레임당 **한 번**만
        부르고, 4개 막은 이 하나의 값에서 산술로 나눈다(각 막의 높이가 같다). */
-    if ((!st.phaseEl || !st.quiet.length) && (st.phaseAt < 0 || elapsed - st.phaseAt > 1)) {
+    if (
+      (!st.phaseEl || !st.quiet.length) &&
+      (st.phaseAt < 0 || elapsed - st.phaseAt > 1)
+    ) {
       st.phaseAt = elapsed;
-      st.phaseEl = document.querySelector('[data-road-stage]');
-      st.actEls = st.phaseEl ? [...st.phaseEl.querySelectorAll('[data-act]')] : [];
-      st.deckEl = st.phaseEl ? st.phaseEl.querySelector<HTMLElement>('[data-deck]') : null;
-      st.quiet = [...document.querySelectorAll('[data-quiet]')].map((el) => ({
+      st.phaseEl = document.querySelector("[data-road-stage]");
+      st.actEls = st.phaseEl
+        ? [...st.phaseEl.querySelectorAll("[data-act]")]
+        : [];
+      st.deckEl = st.phaseEl
+        ? st.phaseEl.querySelector<HTMLElement>("[data-deck]")
+        : null;
+      st.quiet = [...document.querySelectorAll("[data-quiet]")].map((el) => ({
         el,
-        floor: el.getAttribute('data-quiet') === 'panel' ? QUIET_DEEP : QUIET_FLOOR,
-        soft: el.getAttribute('data-quiet') === 'panel' ? QUIET_SOFT_PANEL : QUIET_SOFT,
+        floor:
+          el.getAttribute("data-quiet") === "panel" ? QUIET_DEEP : QUIET_FLOOR,
+        soft:
+          el.getAttribute("data-quiet") === "panel"
+            ? QUIET_SOFT_PANEL
+            : QUIET_SOFT,
         /* 첫 화면의 글 상자. 글이 점으로 바뀌는 만큼 감쇠가 **풀린다** — 붙어 있는
            상자라 글이 사라진 뒤에도 자리는 그대로여서, 안 풀면 도로 왼쪽이 연출
            내내 어둡다. 글자 점의 화면 좌표도 이 상자에서 나온다. */
-        ink: el.getAttribute('data-quiet') === 'ink',
+        ink: el.getAttribute("data-quiet") === "ink",
         bw: Number.NaN,
         bh: Number.NaN,
         at: -1,
@@ -2974,10 +3191,14 @@ export function usePointCloud(
         deckX = deck.scrollLeft;
         const p0 = st.actEls[0] as HTMLElement | undefined;
         const p1 = st.actEls[1] as HTMLElement | undefined;
-        const stride = Math.max(1, p0 && p1 ? p1.offsetLeft - p0.offsetLeft : deck.clientWidth);
+        const stride = Math.max(
+          1,
+          p0 && p1 ? p1.offsetLeft - p0.offsetLeft : deck.clientWidth,
+        );
         const x0 = p0 ? p0.offsetLeft : 0;
         for (let i = 0; i < st.actEls.length && i < ACTS; i++) {
-          actT[i] = (deckX - ((st.actEls[i] as HTMLElement).offsetLeft - x0)) / stride;
+          actT[i] =
+            (deckX - ((st.actEls[i] as HTMLElement).offsetLeft - x0)) / stride;
         }
         /* 시점은 덱이 화면에 **얼마나 들어와 있는가**가 정한다 — 가로 넘김과는
            무관해야 "옆으로 넘겼더니 카메라가 내려앉는" 일이 없다.
@@ -3014,7 +3235,9 @@ export function usePointCloud(
        무대가 없는 페이지(연구·논문…)에는 여는 화면도 없다. 예전 자로 폴백한다.
        rect 는 위에서 이미 한 번 읽었다 — 여기서 DOM 을 다시 읽지 않는다. */
     st.hpSpan =
-      stageDocY > 0 ? Math.max(1, stageDocY - H * 0.15) : Math.max(1, window.innerHeight * 0.85);
+      stageDocY > 0
+        ? Math.max(1, stageDocY - H * 0.15)
+        : Math.max(1, window.innerHeight * 0.85);
     const hp = clamp01(scrollY / st.hpSpan);
 
     /* --- 조용한 영역 굽기 -------------------------------------------
@@ -3046,10 +3269,17 @@ export function usePointCloud(
      * 돌아온다 — 글이 가렸던 자리가 글과 함께 열린다.
      */
     const gIn = glyphRef.current;
+    /* 조립의 **뒷절반**에서 푼다. 앞절반에는 아직 점-글자가 그 자리에 두껍게
+       남아 있어서, 먼저 풀면 밝아진 도로 위에 흰 점이 얹혀 둘 다 안 읽힌다. */
     const inkGone =
       still || !gIn
         ? 0
-        : smooth(clamp01((clamp01((hp - gIn.t0) * gIn.tk) - gIn.h0) * gIn.m0));
+        : smooth(
+            clamp01(
+              (hp - (gIn.loose0 + (gIn.done - gIn.loose0) * 0.55)) /
+                Math.max(1e-4, (gIn.done - gIn.loose0) * 0.45),
+            ),
+          );
     {
       const q = buf.quiet;
       q.fill(1);
@@ -3064,7 +3294,8 @@ export function usePointCloud(
         for (const qe of st.quiet) {
           if (seen >= QUIET_MAX) break;
           const r = qe.el.getBoundingClientRect();
-          if (r.bottom < -softMax || r.top > H + softMax || r.width <= 0) continue;
+          if (r.bottom < -softMax || r.top > H + softMax || r.width <= 0)
+            continue;
           // 가로 덱에서 옆으로 밀려난 패널은 화면 밖이다 — 세로만 보면 헛돈다.
           if (r.right < -softMax || r.left > W + softMax) continue;
           seen++;
@@ -3102,7 +3333,8 @@ export function usePointCloud(
             const by = r.top + box[bi * 4 + 1]!;
             const bR = bx + box[bi * 4 + 2]!;
             const bB = by + box[bi * 4 + 3]!;
-            if (bB < -soft || by > H + soft || bR < -soft || bx > W + soft) continue;
+            if (bB < -soft || by > H + soft || bR < -soft || bx > W + soft)
+              continue;
             st.quietBoxes.push(bx, by, bR - bx, bB - by, soft, floor);
             // 감쇠가 0 이 되는 바깥 경계까지만 격자를 훑는다.
             const c0 = Math.max(0, ((bx - soft) / cw) | 0);
@@ -3177,14 +3409,15 @@ export function usePointCloud(
        `fleetK` 와는 **큰 쪽**을 쓴다. 도착 뒤로는 1 이라 어차피 `fleetK` 를 덮고,
        hp = 1 에서는 둘 다 1 이라 인계가 보이지 않는다. */
     const gl0 = glyphRef.current;
+    /** 잉크가 켜지는 정도 0→1 — 치환 구간의 앞부분에서 다 켜진다. */
+    const sub =
+      gl0 && !still ? clamp01(((hp - gl0.t0) * gl0.subK) / GLYPH_IN) : 0;
+    /** 점-글자가 제자리에서 풀어진 정도 0→1. */
+    const loosen = gl0 && !still ? clamp01((hp - gl0.loose0) * gl0.looseK) : 0;
+    /** 조립이 끝나 가는 정도 — 마지막 15% 에서 나머지 배역이 선다. */
+    const tail = gl0 ? Math.max(1e-4, (gl0.done - gl0.asm0) * 0.15) : 1;
     const roadK =
-      glyphOn && gl0
-        ? smooth(
-            clamp01(
-              (smooth(clamp01((clamp01((hp - gl0.t0) * gl0.tk) - gl0.h0) * gl0.m0)) - 0.85) / 0.15,
-            ),
-          )
-        : 1;
+      glyphOn && gl0 ? smooth(clamp01((hp - (gl0.done - tail)) / tail)) : 1;
     /** 배역이 실제로 보이는 정도 — 글자 도착이 무대 접근보다 먼저 선다. */
     const fleetG = glyphOn ? Math.max(fleetK, roadK) : fleetK;
 
@@ -3252,17 +3485,17 @@ export function usePointCloud(
     if (!still) {
       if (!(Math.abs(hp - st.cssH) < 4e-4)) {
         st.cssH = hp;
-        varsEl.style.setProperty('--h', hp.toFixed(4));
+        varsEl.style.setProperty("--h", hp.toFixed(4));
       }
       if (!(Math.abs(p - st.cssP) < 4e-4)) {
         st.cssP = p;
-        varsEl.style.setProperty('--p', p.toFixed(4));
+        varsEl.style.setProperty("--p", p.toFixed(4));
       }
       // `--v` 는 **시점**이다(0 대시캠 · 1 루프탑). 스크림이 이 값을 따라가야
       // 카메라가 내려온 뒤 — 푸터의 주소 위 — 에 다시 지면이 조용해진다.
       if (!(Math.abs(riseK - st.cssV) < 4e-4)) {
         st.cssV = riseK;
-        varsEl.style.setProperty('--v', riseK.toFixed(4));
+        varsEl.style.setProperty("--v", riseK.toFixed(4));
       }
       /* CSS 에는 **무대 여부를 뺀** 값을 보낸다. 지금 어느 패널에 서 있는지를
          가리키는 값이라, 무대에 다 오르기 전이라고 패널이 흐려지면 안 된다. */
@@ -3356,7 +3589,7 @@ export function usePointCloud(
     if (!still && deckRise >= 0) {
       for (let i = 0; i < ACTS; i++) {
         /* 무대를 벗어나면 처음으로 되돌린다. 그래야 다시 들어왔을 때 그 막이
-           **처음부터** 흐른다 — 안 되돌리면 도착하자마자 중간부터 재생된다. */
+         **처음부터** 흐른다 — 안 되돌리면 도착하자마자 중간부터 재생된다. */
         if (actK[i]! < 0.01 || deckRise < 0.05) {
           actU[i] = 0;
           continue;
@@ -3365,7 +3598,8 @@ export function usePointCloud(
         let u = actU[i]! + dsRun / ACT_RUN;
         if (u >= 1) {
           u -= 1;
-          if (i === ACT_MIX) for (const veh of fleet.cols[0]!.veh) delete veh.fs;
+          if (i === ACT_MIX)
+            for (const veh of fleet.cols[0]!.veh) delete veh.fs;
           if (i === ACT_SERVICE) fleet.taxi.on = 0;
           if (i === ACT_CDA) fleet.mergeIdx = -1;
         }
@@ -3415,9 +3649,9 @@ export function usePointCloud(
               : approach > 0.35
                 ? false
                 : !Number.isNaN(wt) &&
-                (fleet.t - wt) % WAVE_PERIOD >= 0 &&
-                (fleet.t - wt) % WAVE_PERIOD < PLATOON.perturb.duration &&
-                fleet.t >= wt;
+                  (fleet.t - wt) % WAVE_PERIOD >= 0 &&
+                  (fleet.t - wt) % WAVE_PERIOD < PLATOON.perturb.duration &&
+                  fleet.t >= wt;
           const last = vehicles.length - 1;
           // 교란이 **시작되는 순간** 양 끝 차의 속도를 기준으로 잡는다.
           // 막이 시작될 때 직전 파동의 흔적을 지운다
@@ -3605,15 +3839,20 @@ export function usePointCloud(
       fleet.mergeIdx = -1;
     }
     // 간격을 먼저 내주고(0→0.35) 그 다음에 들어온다(0.25→1) — 순서가 중요하다.
-    fleet.mergeK = fleet.mergeIdx < 0 ? 0 : clamp01((actU[ACT_CDA]! - 0.25) / 0.5);
+    fleet.mergeK =
+      fleet.mergeIdx < 0 ? 0 : clamp01((actU[ACT_CDA]! - 0.25) / 0.5);
     fleet.yield =
       fleet.mergeIdx < 0
         ? 0
-        : clamp01(actU[ACT_CDA]! / 0.3) * (1 - clamp01((actU[ACT_CDA]! - 0.62) / 0.2));
+        : clamp01(actU[ACT_CDA]! / 0.3) *
+          (1 - clamp01((actU[ACT_CDA]! - 0.62) / 0.2));
     const moveK = still ? 0 : Math.min(1, Math.abs(vel) / VEL_REF);
     // 노면 종단 + 서스펜션 상하동 — 움직일 때만. 멈추면 진동도 멈춘다.
     // 대시캠은 낮아서 같은 진폭도 훨씬 크게 느껴진다 — 상승하면 서서히 없앤다.
-    const camY = camYBase + curveY(camZ) + 0.025 * (1 - riseK) * moveK * Math.sin(elapsed * 3.4);
+    const camY =
+      camYBase +
+      curveY(camZ) +
+      0.025 * (1 - riseK) * moveK * Math.sin(elapsed * 3.4);
 
     /**
      * 근거리 클립은 **화면 바닥에 해당하는 깊이**로 잡는다. 대시캠에서는 2m,
@@ -3653,7 +3892,8 @@ export function usePointCloud(
       if (st.phase < 0) st.phase = (Math.PI - thMax) / TWO_PI; // θ = -thMax 에서 시작
       st.phase = (st.phase + dt / SWEEP_PERIOD) % 1;
       const th = -Math.PI + st.phase * TWO_PI;
-      const beamNow = th > -thMax && th < thMax ? cx + Math.tan(th) * f : Number.NaN;
+      const beamNow =
+        th > -thMax && th < thMax ? cx + Math.tan(th) * f : Number.NaN;
       const beamPrev = st.beamX;
       if (!Number.isNaN(beamNow)) {
         bLo = Number.isNaN(beamPrev) ? beamNow - 30 : beamPrev;
@@ -3668,11 +3908,14 @@ export function usePointCloud(
       const aimVel = Number.isNaN(st.drawnSteer)
         ? 0
         : Math.abs(steer - st.drawnSteer) + Math.abs(pitch - st.drawnPitch);
-      kBoost = 2.6 * introK + 0.8 * moveK + 0.7 * Math.min(1, aimVel * STEER_BEAM);
+      kBoost =
+        2.6 * introK + 0.8 * moveK + 0.7 * Math.min(1, aimVel * STEER_BEAM);
     }
 
     // 첫 스윕이 끝난 뒤에도 아직 안 훑인 점(그때 화면 밖이었던 점)을 부드럽게 채운다.
-    const introFade = still ? 1 : Math.min(1, Math.max(0, (elapsed - introEnd - 0.15) / 0.9));
+    const introFade = still
+      ? 1
+      : Math.min(1, Math.max(0, (elapsed - introEnd - 0.15) / 0.9));
 
     /* --- 완전 정지 프레임은 통째로 건너뛴다 ---------------------------
        카메라가 멈췄고 빔 게인이 0 이면 직전 프레임과 픽셀이 같다. 페이지를
@@ -3728,7 +3971,9 @@ export function usePointCloud(
       for (let c = COWL_COLS - 1; c >= 0; c--)
         if (cowl[c]! > cowl[c + 1]! + 200) cowl[c] = cowl[c + 1]!;
       // 페이드 중에는 경계를 화면 밖으로 밀어낸다 — 갑자기 걷히지 않게.
-      if (cowlK < 1) for (let c = 0; c <= COWL_COLS; c++) cowl[c] = cowl[c]! + (1 - cowlK) * H;
+      if (cowlK < 1)
+        for (let c = 0; c <= COWL_COLS; c++)
+          cowl[c] = cowl[c]! + (1 - cowlK) * H;
     }
     const cowlOn = cowlK > 0.01;
     const colK = COWL_COLS / W;
@@ -3831,11 +4076,22 @@ export function usePointCloud(
     /** 목표 차 상자 안에 들어온 글자 점 · 차체 색으로 갈아탄 글자 점. */
     let ghostN = 0;
     let swapN = 0;
+    /** 조립의 세 상태 — 글자 자리에 남음 · 공중 · 앉음. 셋이 동시에 0 이 아니어야
+        "점이 흘러가 차를 만든다"가 화면에 있다. */
+    let stillN = 0;
+    let airN = 0;
+    let landN = 0;
     /** 지금 그리는 차의 화면 폭(px) — 유령 계측의 자. `drawCar` 가 채운다. */
     let gCarPx = 0;
 
     /** bin 에 넣는 마지막 한 걸음 — `emit` 의 꼬리와 같다. 글자 점 전용. */
-    const putInk = (sx: number, sy: number, b: number, a: number, ps: number): void => {
+    const putInk = (
+      sx: number,
+      sy: number,
+      b: number,
+      a: number,
+      ps: number,
+    ): void => {
       let ak = (a * ALPHA_STEPS) | 0;
       if (ak > ALPHA_STEPS - 1) ak = ALPHA_STEPS - 1;
       const bin = b * ALPHA_STEPS + ak;
@@ -3848,15 +4104,15 @@ export function usePointCloud(
     };
 
     /**
-     * 글자 점 하나를 그 점이 **자리 잡을 차체 점**과 섞어 찍는다.
+     * 글자 점 하나를 **조립 중인 차체 점**으로 찍는다.
      *
-     * `e` = 0 이면 문서 위의 글자 그 자리, `e` = 1 이면 `emit(…, soft=true)` 가
-     * 찍었을 픽셀과 **정확히 같다** — 그래야 hp = 1 에서 평범한 차 그리기로
-     * 넘어갈 때 아무 일도 일어나지 않는다.
+     * 점마다 출발 시각이 다르다(`o`). 어느 순간에도 세 가지가 동시에 보여야 한다:
+     * 아직 글자 자리에 남은 점, 공중을 흐르는 점, 차에 앉아 굳은 점. 그게 "점이
+     * 흘러가 차를 만드는" 장면이다 — 다 같이 마지막 구간에 수렴시켰더니 보통
+     * 스크롤 속도에서는 그 구간을 한 번에 지나쳐 **차가 그냥 나타났다**.
      *
-     * 포그·카울 그늘·조용한 영역 감쇠는 `e` 만큼만 걸린다. 글자는 아직 도로 위에
-     * 있지 않다 — 특히 조용한 영역은 글이 앉은 자리라, 그대로 먹이면 **글자가
-     * 자기 자리에서 지워진다.**
+     * 다 앉고 번쩍임까지 끝난 점은 `emit` 에 그대로 넘긴다 — 값이 같아야 할
+     * 자리는 같은 식으로 내야 인계(hp = 1)에서 픽셀이 안 튄다.
      */
     const glyphEmit = (
       x: number,
@@ -3867,54 +4123,51 @@ export function usePointCloud(
       size: number,
       /** 글자 점 인덱스 */
       i: number,
-      /** true = LOD 밖의 자리다. 도착 직전에 꺼져야 인계에 남지 않는다. */
+      /** 조립 순서 0(먼저) … 1(나중). 차 순서 × 차 안의 뒤→앞 순서. */
+      o: number,
+      /** true = LOD 밖의 자리다. 앉은 뒤 꺼져야 인계에 남지 않는다. */
       spare = false,
     ): void => {
       if (dz < nearSoft) return;
       const gl = glyphRef.current;
       if (!gl) return;
-      /* 두 단계다. `eRaw` 는 요소 구간 안의 위치(0…1), `e` 는 **이산 구간 안의**
-         진행도다. 치환 구간(`GLYPH_HOLD`) 동안 `e` 는 정확히 0 이라 점이 글자
-         픽셀 위에 그대로 서 있고, 그 뒤에야 위쪽 글자부터(`lag`) 풀려 날아간다.
-         도착은 다 같이 `eRaw` = 1 이다. */
-      const eRaw = clamp01((hp - gl.d[i]!) * gl.k[i]!);
-      const hold = gl.hold[i]!;
-      const e = smooth(clamp01((eRaw - hold) * gl.mv[i]!));
-      /* **수렴은 비행의 뒷부분에서만 일어난다**(§GLYPH_CONV). `e` 는 언제 풀리고
-         언제 닿는가의 시계이고, `c` 는 실제로 차 쪽으로 간 정도다. 위치·색·포그·
-         감쇠·크기가 전부 `c` 를 따른다. */
-      const c = smooth(clamp01((e - GLYPH_CONV) / (1 - GLYPH_CONV)));
+
+      /** 0 = 이제 떠난다, 1 = 자리에 앉았다, 그 위는 착지 번쩍임. */
+      const cExt = (hp - (gl.asm0 + o * gl.asmSpread)) * gl.flyK;
       const lx = st.inkLeft + gl.dx[i]!;
       const ly = st.inkTop + gl.dy[i]!;
       const inv = f / dz;
       const tx = cx + (x - camX) * inv;
       const ty = cy + (camY - y) * inv + (tx - cx) * roll;
-      /* **다 닿았으면 그냥 차체 점이다.** `emit` 에 그대로 넘긴다 — `c = 1` 을
-         보간식에 통과시키면 `b + (t − b)·1` 이 부동소수 1 ULP 만큼 `t` 와 달라져
-         점 일부가 1px 씩 어긋난다(인계 프레임의 픽셀 변화가 이웃의 1.33% 대
-         1.77% 로 벌어졌다). 값이 같아야 할 자리는 **같은 식**으로 낸다.
-         LOD 밖의 자리는 여기서 사라진다 — 인계 뒤에는 없는 점이다. */
-      if (c >= 1) {
+
+      if (cExt >= 1 + GLYPH_FLASH) {
+        // 굳었다. 이제 그냥 차체 점이다.
         if (spare) return;
         moveSum += Math.abs(tx - lx) + Math.abs(ty - ly);
         moveN++;
-        ghostN++;
+        landN++;
         swapN++;
         emit(x, y, dz, b, alpha, size, true);
         return;
       }
-      /* 수렴 전에는 **자기 자리에서** 풀어진다 — 가로로 조금 벌어지고 아래로
-         처진다. 목표 쪽으로 가는 것이 아니라 글자가 흐트러지는 것이다. */
-      const drift = (1 - c) * e;
+
+      const c = cExt <= 0 ? 0 : cExt >= 1 ? 1 : smooth(cExt);
+      if (c <= 0) stillN++;
+      else if (c < 1) airN++;
+      else landN++;
+
+      /* 떠나기 전에는 **자기 자리에서** 풀어진다 — 가로로 조금 벌어지고 아래로
+         처진다. 목표 쪽으로 가는 것이 아니라 글자가 흐트러지는 것이다.
+         글자 자리는 화면에 고정이다(여는 화면이 sticky 라 스크롤해도 안 움직인다). */
+      const drift = loosen * (1 - c);
       const dr = gl.dr[i]!;
-      /* 글자 자리는 **화면에 고정**이다 — 여는 화면이 sticky 라 스크롤해도
-         움직이지 않는다. 그래서 점도 올라가지 않고 제자리에서 풀어진다. */
       const bx = lx + dr * GLYPH_DRIFT_X * drift;
-      const by = ly + (0.45 + 0.55 * (dr < 0 ? -dr : dr)) * GLYPH_DRIFT_Y * drift;
+      const by =
+        ly + (0.45 + 0.55 * (dr < 0 ? -dr : dr)) * GLYPH_DRIFT_Y * drift;
       const sx = bx + (tx - bx) * c;
       if (sx < -8 || sx > W + 8) return;
-      // 약하게 처진다. 직선으로 이으면 글자에서 차까지가 **하늘을 가로지르는 선**
-      // 이라 도로와 무관해 보인다. 튀거나 도는 궤적은 이 사이트가 아니다.
+      // 아래로 처지는 호. 직선으로 이으면 글자에서 차까지가 **하늘을 가로지르는
+      // 선**이라 도로와 무관해 보인다 — 점이 도로 위로 내려앉아야 한다.
       const sy = by + (ty - by) * c + GLYPH_SAG * H * 4 * c * (1 - c);
       if (sy < -8) {
         clipTop++;
@@ -3928,10 +4181,10 @@ export function usePointCloud(
 
       let shade = 1;
       if (cowlOn) {
-        let c = (sx * colK) | 0;
-        if (c < 0) c = 0;
-        else if (c > COWL_COLS) c = COWL_COLS;
-        const over = (sy - cowl[c]!) * invCowlSoft;
+        let col = (sx * colK) | 0;
+        if (col < 0) col = 0;
+        else if (col > COWL_COLS) col = COWL_COLS;
+        const over = (sy - cowl[col]!) * invCowlSoft;
         if (over > 0) shade = over >= 1 ? 0 : 1 - over;
       }
       {
@@ -3945,13 +4198,18 @@ export function usePointCloud(
       }
       shade = 1 + (shade - 1) * c;
 
-      // 켜지는 것은 **치환 구간의 시계**(eRaw)로 한다. 이산 진행도로 켜면 날아가기
-      // 시작할 때 켜져서, 글자가 꺼진 자리에 아무것도 없는 순간이 생긴다.
-      const la = gl.a[i]! * clamp01(eRaw / (hold * GLYPH_IN));
+      // 켜지는 것은 **치환 구간의 시계**다. 날아갈 때 켜면 글자가 꺼진 자리에
+      // 아무것도 없는 순간이 생긴다.
+      const la = gl.a[i]! * sub;
       let a = (la + (alpha - la) * c) * fog * shade;
-      /* LOD 밖의 자리는 도착 직전에 꺼진다. 그래야 hp = 1 에서 `drawCar` 가
-         찍는 lod 개의 점과 **정확히 같은 집합**이 남는다. */
-      if (spare) a *= 1 - smooth(clamp01((c - 0.9) * 10));
+      /* 앉는 순간 **재귀반사처럼 한 번 튄다**(≈12px 스크롤). 점이 차가 되는 그
+         순간을 눈이 집을 수 있어야 한다. 번쩍임이 끝나면 위의 `emit` 경로로
+         넘어가므로 인계에 흔적이 남지 않는다. */
+      const flash = cExt > 1 ? 1 - smooth((cExt - 1) / GLYPH_FLASH) : 0;
+      if (flash > 0) a *= 1 + GLYPH_FLASH_GAIN * flash;
+      /* LOD 밖의 자리는 앉자마자 꺼진다. 그래야 인계에서 `drawCar` 가 찍는 lod
+         개의 점과 **정확히 같은 집합**이 남는다. */
+      if (spare) a *= 1 - smooth(clamp01((cExt - 0.92) / (0.08 + GLYPH_FLASH)));
       if (a < 0.05) return;
       if (a > 1) a = 1;
 
@@ -3960,17 +4218,20 @@ export function usePointCloud(
       if (ps < 1) ps = 1;
       else if (ps > 9) ps = 9;
 
-      /* 계측(검사기 전용): 옮겨 간 거리, **목표 차 상자 안에 들어온 점**(= 유령
-         윤곽), 차체 색으로 갈아탄 점. 도착 전 구간에서 뒤 둘이 0 이어야 한다. */
+      /* 계측(검사기 전용): 옮겨 간 거리 · 목표 차 상자 안에 든 점 · 차체 색으로
+         갈아탄 점. 공중에 있는 동안 뒤 둘이 0 이어야 한다. */
       moveSum += Math.abs(sx - lx) + Math.abs(sy - ly);
       moveN++;
       const near = gCarPx * 0.2 + 1;
       if (Math.abs(sx - tx) < near && Math.abs(sy - ty) < near) ghostN++;
-      const swapped = c >= gl.sw[i]!;
-      if (swapped) swapN++;
-
-      // 색은 도중에 **갈아탄다**. 두 색을 겹쳐 크로스페이드하면 점이 두 배가 된다.
-      putInk(sx, sy, swapped ? b : gl.b[i]!, a, ps);
+      /* 색은 **앉는 순간에만** 갈아탄다. 공중의 점은 글자 색(흰색)이다 — 날아가는
+         도중에 차체 색이 되면 그것도 "이미 차가 있다"로 읽힌다. */
+      let bin = gl.b[i]!;
+      if (c >= 1 && flash <= GLYPH_FLASH_SWAP) {
+        swapN++;
+        bin = b;
+      }
+      putInk(sx, sy, bin, a, ps);
     };
 
     /* ① 정적 씬 — 원경 구조물 + 먼 노면. 스윕 빔이 여기를 훑는다. */
@@ -4154,24 +4415,29 @@ export function usePointCloud(
          정확히 1 이고, 그 시점에는 `alpha` 도 1 이라 넘겨받는 자리가 매끄럽다. */
       let aCar = alpha;
       let aRest = alpha;
+      /** 이 차가 조립 순서에서 차지하는 구간 [ord0, ord0 + ordK]. */
+      let ord0 = 0;
+      let ordK = 1;
       if (gN > 0) {
         gCarPx = px;
         const gl = glyphRef.current;
-        let eCar = 1;
         if (gl) {
-          const mid = gOff + (gN >> 1);
-          const eRaw = clamp01((hp - gl.d[mid]!) * gl.k[mid]!);
-          const eMid = smooth(clamp01((eRaw - gl.hold[mid]!) * gl.mv[mid]!));
-          // 차가 서는 시점도 **수렴**을 따른다 — 비행 중반에 차체가 차오르면
-          // 그것도 도착 전 유령이다.
-          eCar = smooth(clamp01((eMid - GLYPH_CONV) / (1 - GLYPH_CONV)));
+          /* **차는 순서대로 쌓인다.** 무리(우리 차로 / 옆 차로) 안에서 이 차가
+             받은 점의 구간이 곧 순서다 — 배정이 가까운 차부터 채워지므로 화면에서
+             가장 큰 차가 가장 먼저·가장 오래 조립된다. */
+          const grpNext = gOff >= gl.nextOff;
+          const grpOff = grpNext ? gl.nextOff : gl.laneOff;
+          const grpN = Math.max(1, grpNext ? gl.nextN : gl.laneN);
+          ord0 = (gOff - grpOff) / grpN;
+          ordK = gN / grpN;
+          /* 이 차의 **마지막 점**이 앉는 시점. 그 전에는 빈 자리를 채우지 않는다 —
+             조립 중인 차는 쌓인 점만 보여야 "쌓이는 중"으로 읽힌다. 다만 이미 제
+             알파로 서 있던 차를 지워서는 안 된다. */
+          const last = gl.asm0 + (ord0 + ordK) * gl.asmSpread;
+          aRest = Math.max(alpha, smooth(clamp01((hp - last) * gl.flyK)));
         }
-        aCar = Math.max(alpha, smooth(clamp01((eCar - 0.3) / 0.7)));
-        /* 글자가 아닌 점은 글자가 **다 닿은 뒤에** 차오른다 — 차가 먼저 서 있으면
-           글자가 빈 자리를 채우는 것이 아니라 그냥 겹쳐 보인다. 다만 이미 제 알파로
-           서 있던 차(`alpha`)를 이 때문에 지워서는 안 된다: 글자가 떠나 있는 동안
-           차가 통째로 사라진다. 글자가 가져간 점만큼만 성겨지는 것이 맞다. */
-        aRest = Math.max(alpha, aCar * smooth(clamp01((eCar - 0.55) / 0.45)));
+        // 앉은 점은 곧바로 **차의 최종 알파**로 굳는다. hp = 1 의 `va` 와 같은 값이다.
+        aCar = 1;
       }
 
       /* 글자가 앉는 동안에는 **LOD 밖까지** 그린다(`gN` 이 lod 보다 클 수 있다).
@@ -4185,7 +4451,25 @@ export function usePointCloud(
         const wdz = dz0 - lx * sth + lz * cth;
         const bkt = braking && tpl.lamp[j] ? RAMP_BUCKETS - 1 : tpl.bucket[j]!;
         if (j < gN) {
-          glyphEmit(wx, wy, wdz, bkt, tpl.baseA[j]! * aCar, tpl.sw[j]!, gOff + j, j >= lod);
+          /* 차 안의 순서는 **뒤에서 앞으로**(카메라에 가까운 면부터) — 스캐너가
+             훑듯이 쌓인다. 그래서 조립 중인 차는 흐릿한 전체가 아니라 **반쪽이
+             또렷하고 반쪽이 없는** 모습이 된다. 흔들림을 조금 섞어 기계적인
+             평면 스윕이 되지 않게 한다. */
+          const jit =
+            (((j * 1103515245 + 12345) & 0xffff) / 65535 - 0.5) *
+            GLYPH_ORD_JITTER;
+          const o = ord0 + ordK * clamp01(tpl.ordz[j]! + jit);
+          glyphEmit(
+            wx,
+            wy,
+            wdz,
+            bkt,
+            tpl.baseA[j]! * aCar,
+            tpl.sw[j]!,
+            gOff + j,
+            o,
+            j >= lod,
+          );
         } else if (j < lod) {
           emit(wx, wy, wdz, bkt, tpl.baseA[j]! * aRest, tpl.sw[j]!, true);
         }
@@ -4264,10 +4548,11 @@ export function usePointCloud(
         slots.ordered = true;
       }
 
-      /* 한 무리를 차들에 나눈다. **두 번에 걸쳐** 나누는 이유: 가장 가까운 차는
-         혼자서 500점 넘게 받을 수 있어, 순서대로 채우면 워드마크가 통째로 차 한
-         대에 뭉친다 — 도로로 들어가는 것이 아니라 한 덩어리가 되어 버린다.
-         먼저 고르게 돌리고, 남은 점만 자리가 남은 차에 마저 준다. */
+      /* 한 무리를 차들에 **가까운 차부터 가득** 나눈다.
+         한때 고르게 돌렸다. 그때는 점이 다 같이 한 순간에 수렴해서, 한 차에 몰리면
+         그 자리에 덩어리 하나가 생겼기 때문이다. 지금은 차례로 **쌓이므로** 반대다
+         — 화면에서 가장 큰 차가 MAIA 로 통째로 만들어지는 편이 강렬하고, 남는
+         점이 다음 차로 넘어가는 것이 "다 만들고 다음 차"로 읽힌다. */
       const share = (
         ids: Int32Array,
         k: number,
@@ -4277,18 +4562,11 @@ export function usePointCloud(
         cnt: Int32Array,
       ): number => {
         if (k <= 0 || to <= from) return from;
-        const fair = Math.ceil(((to - from) / k) * 1.5);
         let left = to - from;
         for (let i = 0; i < k; i++) {
-          const t = Math.min(lods[i]!, fair, left);
+          const t = Math.min(lods[i]!, left);
           take[i] = t;
           left -= t;
-        }
-        for (let i = 0; i < k && left > 0; i++) {
-          const room = Math.min(lods[i]! - take[i]!, left);
-          if (room <= 0) continue;
-          take[i] = take[i]! + room;
-          left -= room;
         }
         // 자리는 **차 순서대로 이어서** 준다 — 한 차가 받는 점이 붙어 있어야
         // 템플릿 점 0…n 에 그대로 대응한다.
@@ -4309,7 +4587,14 @@ export function usePointCloud(
         lods[i] = dz0 >= near && dz0 <= FAR ? seatsOf(sh.rear) : 0;
       }
       const laneEnd = gl.laneOff + gl.laneN;
-      slots.lost[0] = share(slots.laneIds, slots.laneK, gl.laneOff, laneEnd, slots.laneOff, slots.laneN);
+      slots.lost[0] = share(
+        slots.laneIds,
+        slots.laneK,
+        gl.laneOff,
+        laneEnd,
+        slots.laneOff,
+        slots.laneN,
+      );
       slots.lost[1] = laneEnd;
 
       /* ② 옆 차로 — 창 안에 있는 차만, 얼린 순서대로. */
@@ -4320,7 +4605,14 @@ export function usePointCloud(
         lods[i] = dz0 >= near && dz0 <= FAR ? seatsOf(sh.rear) : 0;
       }
       const nextEnd = gl.nextOff + gl.nextN;
-      slots.lost[2] = share(slots.nextIds, slots.nextK, gl.nextOff, nextEnd, slots.nextOff, slots.nextN);
+      slots.lost[2] = share(
+        slots.nextIds,
+        slots.nextK,
+        gl.nextOff,
+        nextEnd,
+        slots.nextOff,
+        slots.nextN,
+      );
       slots.lost[3] = nextEnd;
     } else {
       slots.laneN.fill(0);
@@ -4419,7 +4711,11 @@ export function usePointCloud(
         cars[fleet.taxi.shape]!.shape.wid,
       );
     }
-    if (fleet.mergeIdx >= 0 && Number.isFinite(mergeTargetDz) && mergeAllow > 0) {
+    if (
+      fleet.mergeIdx >= 0 &&
+      Number.isFinite(mergeTargetDz) &&
+      mergeAllow > 0
+    ) {
       const mv = fleet.cols[0]!.veh.find((v) => v.id === fleet.mergeIdx);
       if (mv) {
         const ring = mv.x - mv.length;
@@ -4436,7 +4732,12 @@ export function usePointCloud(
     }
 
     /** 예약된 자리와의 여유(m). 음수면 겹친다. */
-    const clearance = (dz: number, x: number, len: number, wid: number): number => {
+    const clearance = (
+      dz: number,
+      x: number,
+      len: number,
+      wid: number,
+    ): number => {
       let worst = Infinity;
       for (let i = 0; i < nRes; i++) {
         const dzGap = Math.abs(dz - resDz[i]!) - (len + resL[i]!) * 0.5;
@@ -4470,7 +4771,11 @@ export function usePointCloud(
           let a = fleetG;
           // 04막: 옆 차로 한 대가 협조 합류로 우리 차로에 들어온다.
           // 횡·종방향을 **같은 진행도로 함께** 옮긴다 — 옆으로만 밀면 몸통이 겹친다.
-          if (ci === 0 && veh.id === fleet.mergeIdx && Number.isFinite(mergeTargetDz)) {
+          if (
+            ci === 0 &&
+            veh.id === fleet.mergeIdx &&
+            Number.isFinite(mergeTargetDz)
+          ) {
             lane = LANE_NEXT + (LANE_X - LANE_NEXT) * mergeMx;
             dz0 += (mergeTargetDz - veh.length * 0.5 - dz0) * mergeMz;
             if (dz0 < near || dz0 > FAR) continue;
@@ -4508,17 +4813,20 @@ export function usePointCloud(
       for (let g = 0; g < 2; g++) {
         const from = slots.lost[g * 2]!;
         const to = slots.lost[g * 2 + 1]!;
+        /* 자리를 못 얻은 점은 **모이지 않는다.** 조립이 도는 동안 제자리에서
+           풀어지다 스러진다 — 어디로도 가지 않으니 순서도 없다. */
+        const eLost = smooth(
+          clamp01((hp - gl.asm0) / Math.max(1e-4, gl.done - gl.asm0)),
+        );
+        // **여기서 함수를 빠져나가면 안 된다** — 프레임의 나머지가 통째로 날아간다.
+        if (eLost >= GLYPH_LOST) continue;
+        const fadeLost = 1 - smooth(eLost / GLYPH_LOST);
         for (let i = from; i < to; i++) {
-          const eRaw = clamp01((hp - gl.d[i]!) * gl.k[i]!);
-          if (eRaw <= 0) continue;
-          const e = smooth(clamp01((eRaw - gl.hold[i]!) * gl.mv[i]!));
-          if (e >= GLYPH_LOST) continue;
-          const a =
-            gl.a[i]! * clamp01(eRaw / (gl.hold[i]! * GLYPH_IN)) * (1 - smooth(e / GLYPH_LOST));
+          const e = eLost;
+          const a = gl.a[i]! * sub * fadeLost;
           if (a < 0.05) continue;
           const lx = st.inkLeft + gl.dx[i]!;
           const ly = st.inkTop + gl.dy[i]!;
-          // 자리를 못 얻은 점은 **모이지 않는다.** 제자리에서 풀어지다 스러진다.
           const dr = gl.dr[i]!;
           const sx = lx + dr * GLYPH_DRIFT_X * e + (ax - lx) * e * 0.12;
           if (sx < -8 || sx > W + 8) continue;
@@ -4603,7 +4911,15 @@ export function usePointCloud(
       const by = curveY(wz) + 0.02;
       const cnt = Math.max(1, Math.round((half * 2) / stepM));
       for (let i = 0; i <= cnt; i++) {
-        emit(bx - half + (i * half * 2) / cnt, by, dz0, bucketIdx, alpha, 0.09, true);
+        emit(
+          bx - half + (i * half * 2) / cnt,
+          by,
+          dz0,
+          bucketIdx,
+          alpha,
+          0.09,
+          true,
+        );
       }
     };
 
@@ -4639,13 +4955,20 @@ export function usePointCloud(
           emit(bx, by + (i / n2) * h, dz0, bi, 0.8 * aBars, 0.13, true);
         }
         // 바닥 기준 틱 — 막대가 노면에 뿌리내려 있어야 높이가 읽힌다
-        for (let i = -2; i <= 2; i++) emit(bx + i * 0.14, by + 0.02, dz0, 2, 0.6 * aBars, 0.1, true);
+        for (let i = -2; i <= 2; i++)
+          emit(bx + i * 0.14, by + 0.02, dz0, 2, 0.6 * aBars, 0.1, true);
         // 눈금 — 순항 속도 자리. 막대가 여기까지 차 있으면 평형이다.
         emit(bx - 0.26, by + hMax, dz0, 2, 0.6 * aBars, 0.1, true);
         emit(bx + 0.26, by + hMax, dz0, 2, 0.6 * aBars, 0.1, true);
         // 제동 중인 차 아래 노면에 계측선 — 교란이 어디까지 왔는지
         if (veh.a < -0.5) {
-          chalk(wz, lane, 1.1, RAMP_BUCKETS - 1, 0.8 * aBars * clamp01(-veh.a / 1.5));
+          chalk(
+            wz,
+            lane,
+            1.1,
+            RAMP_BUCKETS - 1,
+            0.8 * aBars * clamp01(-veh.a / 1.5),
+          );
         }
       }
     }
@@ -4730,7 +5053,16 @@ export function usePointCloud(
       const dzT = taxi.dz;
       if (dzT > nearSoft && dzT < FAR) {
         box(dzT, taxi.x, sh.shape.len, sh.shape.wid);
-        drawCar(sh.rear, camZ + dzT, dzT, taxi.x, sh.shape.wid, aPickup, taxi.brake, 1);
+        drawCar(
+          sh.rear,
+          camZ + dzT,
+          dzT,
+          taxi.x,
+          sh.shape.wid,
+          aPickup,
+          taxi.brake,
+          1,
+        );
         // 지붕 표식 — 이 차가 배차된 차다
         for (let i = 0; i < 6; i++) {
           emit(
@@ -4771,7 +5103,15 @@ export function usePointCloud(
         if (pinA > 0.02) {
           const pulse = 0.55 + 0.45 * Math.sin(elapsed * 3.1);
           for (let i = 0; i < 9; i++) {
-            emit(wx, wy + 1.95 + i * 0.13, dzP, RAMP_BUCKETS - 2, pinA * pulse, 0.1, true);
+            emit(
+              wx,
+              wy + 1.95 + i * 0.13,
+              dzP,
+              RAMP_BUCKETS - 2,
+              pinA * pulse,
+              0.1,
+              true,
+            );
           }
         }
         // 배차선 — 차에서 승객까지. 도착하면 사라진다.
@@ -4783,7 +5123,9 @@ export function usePointCloud(
             const d = dzT + (dzP - dzT) * tt;
             if (d < nearSoft || d > FAR) continue;
             const wz2 = camZ + d;
-            const flow = 0.3 + 0.7 * Math.max(0, Math.sin((tt - elapsed * 0.6) * TWO_PI * 1.4));
+            const flow =
+              0.3 +
+              0.7 * Math.max(0, Math.sin((tt - elapsed * 0.6) * TWO_PI * 1.4));
             emit(
               curveX(wz2) + taxi.x + (taxi.paxX - taxi.x) * tt,
               curveY(wz2) + 0.04,
@@ -4820,7 +5162,9 @@ export function usePointCloud(
           const d = wz - camZ;
           if (d < nearSoft || d > FAR) continue;
           // 신호가 한쪽으로 흐르는 것처럼 — 밝기로만 표시한다(굵기는 일정).
-          const flow = 0.45 + 0.55 * Math.max(0, Math.sin((tt - elapsed * 0.55) * TWO_PI * 1.5));
+          const flow =
+            0.45 +
+            0.55 * Math.max(0, Math.sin((tt - elapsed * 0.55) * TWO_PI * 1.5));
           emit(
             curveX(wz) + xA + (xB - xA) * tt,
             curveY(wz) + yA + (yB - yA) * tt,
@@ -4916,12 +5260,12 @@ export function usePointCloud(
     }
 
     /* --- 그리기 ------------------------------------------------------ */
-    ctx.globalCompositeOperation = 'source-over';
+    ctx.globalCompositeOperation = "source-over";
     ctx.fillStyle = pal.bg;
     ctx.fillRect(0, 0, W, H);
 
     // 글로우는 가산 합성으로만 낸다. shadowBlur 금지(치명적으로 느리다).
-    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalCompositeOperation = "lighter";
 
     let start = 0;
     for (let b = 0; b < BINS; b++) {
@@ -4933,7 +5277,11 @@ export function usePointCloud(
       const alphaIdx = b - bucketIdx * ALPHA_STEPS;
 
       // 잉크 버킷(글자)에는 후광을 씌우지 않는다 — 글자는 또렷해야 읽힌다.
-      if (bucketIdx >= HALO_MIN_BUCKET && bucketIdx < INK_B0 && alphaIdx >= HALO_MIN_ALPHA) {
+      if (
+        bucketIdx >= HALO_MIN_BUCKET &&
+        bucketIdx < INK_B0 &&
+        alphaIdx >= HALO_MIN_ALPHA
+      ) {
         ctx.fillStyle = pal.halo[b];
         for (let j = start; j < end; j++) {
           const q = sps[j] + 2;
@@ -4950,7 +5298,7 @@ export function usePointCloud(
       start = end;
     }
 
-    ctx.globalCompositeOperation = 'source-over';
+    ctx.globalCompositeOperation = "source-over";
 
     st.dirty = false;
     st.drawnZ = st.camZ;
@@ -4963,7 +5311,8 @@ export function usePointCloud(
 
     // 계측 훅 — 검증 스크립트가 카메라 상태를 읽는다. DOM 변경이 아니라 속성이라
     // 스타일 무효화가 없다.
-    const probe = canvasRef.current as (HTMLCanvasElement & { roadProbe?: RoadProbe }) | null;
+    const probe = canvasRef.current as
+      (HTMLCanvasElement & { roadProbe?: RoadProbe }) | null;
     if (probe) {
       const rp =
         probe.roadProbe ??
@@ -5001,7 +5350,10 @@ export function usePointCloud(
             ghost: 0,
             swapped: 0,
             span: 0,
-            t: [0, 0, 0],
+            t: [0, 0, 0, 0],
+            stay: 0,
+            air: 0,
+            land: 0,
             seated: 0,
             lost: 0,
             group: [0, 0],
@@ -5029,9 +5381,11 @@ export function usePointCloud(
       for (let i = 0; i < nBox; i++) {
         for (let j = i + 1; j < nBox; j++) {
           // 차체 상자가 두 축 모두에서 겹치면 화면에서도 겹쳐 보인다.
-          const dz = Math.abs(boxZ[i]! - boxZ[j]!) - (boxL[i]! + boxL[j]!) * 0.5;
+          const dz =
+            Math.abs(boxZ[i]! - boxZ[j]!) - (boxL[i]! + boxL[j]!) * 0.5;
           if (dz >= 0) continue;
-          const dx = Math.abs(boxX[i]! - boxX[j]!) - (boxW[i]! + boxW[j]!) * 0.5;
+          const dx =
+            Math.abs(boxX[i]! - boxX[j]!) - (boxW[i]! + boxW[j]!) * 0.5;
           if (dx >= 0) continue;
           ov++;
           const depth = Math.min(-dz, -dx);
@@ -5047,7 +5401,9 @@ export function usePointCloud(
       rp.speed.length = 0;
       for (let k = 0; k < vehicles.length; k++) {
         if (k < vehicles.length - 1) {
-          rp.gaps.push(vehicles[k + 1]!.x - vehicles[k + 1]!.length - vehicles[k]!.x);
+          rp.gaps.push(
+            vehicles[k + 1]!.x - vehicles[k + 1]!.length - vehicles[k]!.x,
+          );
         }
         rp.accel.push(vehicles[k]!.a);
         rp.speed.push(vehicles[k]!.v * 3.6);
@@ -5072,7 +5428,9 @@ export function usePointCloud(
       rp.waveBand[0] = lo * 3.6;
       rp.waveBand[1] = hi * 3.6;
       // 선두가 1, 자차가 마지막. 아직 아무도 문턱을 못 넘었으면 0.
-      rp.wave[0] = Number.isFinite(st.waveFront) ? vehicles.length - st.waveFront : 0;
+      rp.wave[0] = Number.isFinite(st.waveFront)
+        ? vehicles.length - st.waveFront
+        : 0;
       rp.wave[1] = st.waveReach;
       rp.pickup[0] = fleet.taxi.on;
       rp.pickup[1] = fleet.taxi.dz;
@@ -5095,28 +5453,27 @@ export function usePointCloud(
           seated += slots.nextN[k]!;
           mo.next.push(slots.nextN[k]!);
         }
-        let sum = 0;
-        let rawSum = 0;
-        if (gl) {
-          for (let i = 0; i < gl.n; i++) {
-            const eRaw = clamp01((hp - gl.d[i]!) * gl.k[i]!);
-            rawSum += eRaw;
-            sum += smooth(clamp01((eRaw - gl.hold[i]!) * gl.mv[i]!));
-          }
-        }
+        const drawn = Math.max(1, stillN + airN + landN);
         mo.n = gl ? gl.n : 0;
-        mo.e = gl && gl.n ? sum / gl.n : 0;
-        mo.raw = gl && gl.n ? rawSum / gl.n : 0;
+        // 실제로 그린 글자 점의 세 상태 — 조립이 흐르고 있다는 증거.
+        mo.stay = stillN / drawn;
+        mo.air = airN / drawn;
+        mo.land = landN / drawn;
+        mo.e = gl && gl.n ? landN / drawn : 0;
+        mo.raw =
+          gl && !still
+            ? clamp01((hp - gl.t0) / Math.max(1e-4, gl.done - gl.t0))
+            : 0;
         mo.move = moveN ? moveSum / moveN : 0;
         mo.clipTop = clipTop;
         mo.ghost = moveN ? ghostN / moveN : 0;
         mo.swapped = moveN ? swapN / moveN : 0;
         mo.span = st.hpSpan;
         if (gl) {
-          const run = 1 / gl.tk;
           mo.t[0] = gl.t0 * st.hpSpan;
-          mo.t[1] = (gl.t0 + run * gl.h0) * st.hpSpan;
-          mo.t[2] = (gl.t0 + run) * st.hpSpan;
+          mo.t[1] = gl.loose0 * st.hpSpan;
+          mo.t[2] = gl.asm0 * st.hpSpan;
+          mo.t[3] = gl.done * st.hpSpan;
         }
         mo.seated = seated;
         mo.lost = gl ? gl.n - seated : 0;
@@ -5135,8 +5492,12 @@ export function usePointCloud(
      붙어 있으면 마지막 탭 자리에 시선이 얼어붙는다. */
   useEffect(() => {
     if (reducedMotion) return;
-    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
-    if (!window.matchMedia('(pointer: fine)').matches) return;
+    if (
+      typeof window === "undefined" ||
+      typeof window.matchMedia !== "function"
+    )
+      return;
+    if (!window.matchMedia("(pointer: fine)").matches) return;
 
     const aim = aimRef.current;
     const onMove = (e: PointerEvent) => {
@@ -5149,13 +5510,13 @@ export function usePointCloud(
       aim.tx = 0.5;
       aim.ty = 0.5;
     };
-    window.addEventListener('pointermove', onMove, { passive: true });
-    document.addEventListener('pointerleave', onLeave);
-    window.addEventListener('blur', onLeave);
+    window.addEventListener("pointermove", onMove, { passive: true });
+    document.addEventListener("pointerleave", onLeave);
+    window.addEventListener("blur", onLeave);
     return () => {
-      window.removeEventListener('pointermove', onMove);
-      document.removeEventListener('pointerleave', onLeave);
-      window.removeEventListener('blur', onLeave);
+      window.removeEventListener("pointermove", onMove);
+      document.removeEventListener("pointerleave", onLeave);
+      window.removeEventListener("blur", onLeave);
       onLeave();
     };
   }, [reducedMotion]);
@@ -5164,7 +5525,8 @@ export function usePointCloud(
      글꼴(system-ui)의 모양이라, 모노 글자가 있는 줄은 자리도 폭도 다르다.
      `fonts.ready` 는 한 번만 기다린다 — 그 뒤의 재조판은 `onResize` 가 잡는다. */
   useEffect(() => {
-    if (reducedMotion || typeof document === 'undefined' || !document.fonts) return;
+    if (reducedMotion || typeof document === "undefined" || !document.fonts)
+      return;
     let alive = true;
     void document.fonts.ready.then(() => {
       if (!alive) return;
@@ -5179,15 +5541,15 @@ export function usePointCloud(
   /* 동작 줄이기에서만 붙는다. 애니메이션이 도는 쪽은 rAF 가 매 프레임 `window.scrollY`
      를 직접 읽으므로 스크롤 리스너가 필요 없다 — 두 경로가 겹치면 헛돈다. */
   useEffect(() => {
-    if (!reducedMotion || typeof window === 'undefined') return;
+    if (!reducedMotion || typeof window === "undefined") return;
     const onScroll = () => redrawStill();
-    window.addEventListener('scroll', onScroll, { passive: true });
-    window.addEventListener('resize', onScroll, { passive: true });
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll, { passive: true });
     // 마운트 직후 이미 스크롤된 위치일 수 있다(새로고침·앵커 착지).
     onScroll();
     return () => {
-      window.removeEventListener('scroll', onScroll);
-      window.removeEventListener('resize', onScroll);
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onScroll);
       if (stillRafRef.current) {
         cancelAnimationFrame(stillRafRef.current);
         stillRafRef.current = 0;

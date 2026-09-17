@@ -237,10 +237,11 @@ const RECRUIT_NOTE = RECRUIT.length > 1 ? RECRUIT[RECRUIT.length - 1] : '';
    * 그대로다** — 첫 화면의 글 위치가 1px 도 움직이지 않는다(hero:check 기준).
    */
   .open {
-    /* 연출이 도는 동안 첫 화면이 붙어 있을 거리. 치환 150 + 비행 300 = 450px 를
-       **세로가 짧은 창에서도** 덮어야 하므로 비율과 절대값 중 큰 쪽을 쓴다
-       (468px 창에서 62dvh 는 290px 뿐이다). */
-    --open-run: max(62dvh, 34rem);
+    /* 연출이 도는 동안 첫 화면이 붙어 있을 거리. 치환 250 + 풀어짐 100 + 조립
+       500 = 866px 를 **세로가 짧은 창에서도** 덮어야 하므로 비율과 절대값 중 큰
+       쪽을 쓴다(468px 창에서 110dvh 는 515px 뿐이다). 도착 뒤로 남는 구간에서는
+       글자로 만들어진 차들이 달리는 것을 본다. */
+    --open-run: max(110dvh, 60rem);
     min-block-size: calc(100dvh + var(--open-run));
     inline-size: min(46rem, 54%);
   }
@@ -527,7 +528,8 @@ const RECRUIT_NOTE = RECRUIT.length > 1 ? RECRUIT[RECRUIT.length - 1] : '';
      * `svh` 를 쓰는 이유: 주소창이 보이는 상태의 높이라 어떤 경우에도 넘치지 않는다.
      */
     .open {
-      --open-run: max(62svh, 34rem);
+      /* 모바일은 구간이 0.7배(도착 611px)라 그만큼 짧게 잡는다. */
+      --open-run: max(100svh, 46rem);
       inline-size: 100%;
       min-block-size: calc(100svh + var(--open-run));
     }
