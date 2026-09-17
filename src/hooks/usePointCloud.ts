@@ -1478,6 +1478,22 @@ function buildPed(): PedTemplate {
  */
 const FLEET_N = 5;
 /**
+ * 차로 안의 느린 횡방향 흔들림 진폭(m). 사람도 ACC 도 차로 한가운데를 자로 잰 듯
+ * 지키지 않는다 — 고정 오프셋(`jog`)만 두면 대열이 **레일 위를 달리는 것**으로
+ * 보였다(교수님: "차들이 일정한 간격으로 가거나 부자연스럽게 움직여서").
+ * ACC 는 차로 유지가 촘촘하고 사람은 더 흐른다. 차로 폭 3.5m 안의 ±십수 cm 라
+ * 옆 차와 겹칠 수 없다(겹침 검사가 같은 값을 쓴다).
+ */
+const WANDER_ACC = 0.07;
+const WANDER_HUMAN = 0.16;
+/**
+ * 배경 도로의 앞 대열에만 섞는 가속 잡음(m/s²). 검증표의 `accCommercial` 은 잡음 0 —
+ * 그 값은 계측기(TrafficSim)의 것이고 거기서는 건드리지 않는다. 배경에서는 잡음 0 인
+ * 다섯 대가 등속으로 줄지어 가서 모형 기차로 보였다. 0.12 는 사람(0.35)의 3분의 1 —
+ * 02막의 제동 전파(stage:check)가 그대로 재현되는 것을 확인한 값이다.
+ */
+const FLEET_NOISE = 0.12;
+/**
  * 플래툰 순항 속도(m/s) ≈ 12 km/h — 정체류.
  *
  * **이 값은 화면상 도로 속도와 무관하다.** 도로가 흐르는 속도는 `M_PER_PX` 가
@@ -2021,7 +2037,18 @@ const GLYPH_START_PX = 16;
  * 걸쳐 보내는 계단)을 서른 프레임 남짓에 편다. 도로가 아니라 **글자 연출만**
  * 이 완충을 쓴다 — "스크롤이 곧 주행"은 도로의 규칙이다.
  */
-const HP_TAU = 0.36;
+const HP_TAU = 0.17;
+/**
+ * 스크롤 입력이 **도로로** 들어오는 시간상수(s). 휠 한 칸의 계단을 편다.
+ * `camZ` 의 자체 감쇠(`DAMP`, τ≈0.17s)와 겹쳐 도로는 τ≈0.33s 로 따라가고,
+ * 글자 재생 헤드도 여기에 `HP_TAU` 를 더해 같은 자리에 온다 — **한 시계**다.
+ */
+const SCROLL_TAU = 0.16;
+/**
+ * 터치는 브라우저가 관성으로 이미 매끄럽게 굴린다 — 그 위에 같은 완충을 얹으면
+ * 손가락을 뗀 뒤 도로가 한 번 더 미끄러져 무겁게 느껴진다. 짧게 잡는다.
+ */
+const SCROLL_TAU_TOUCH = 0.09;
 
 /** 도착 상한. hp = 1 에서는 **전부** 자리 잡아 있어야 한다. */
 const GLYPH_END = 0.97;
@@ -2485,6 +2512,8 @@ const driver = (
    */
   s0Lo = 0.5,
   s0Hi = 2.5,
+  /** 차두시간 편차(±비율). 기본 ±5%. 배경 앞 대열은 ±12% — 아래 주석 참조. */
+  tSpread = 0.05,
 ): IDMParams => ({
   ...base,
   /* **차두시간 T 는 거의 흔들지 않는다.** T 는 간격만 정하는 값이 아니라
@@ -2503,7 +2532,7 @@ const driver = (
      급제동을 걸어도 뒷차가 반응할 이유가 없었다 — 02막의 연쇄가 통째로 사라졌다
      (실측으로 잡았다: gap=[14 12 15 **40**]). 같은 도로를 달리는 차들의 희망속도는
      애초에 같다고 보는 편이 맞다 — 다른 것은 차두시간과 정지간격이다. */
-  T: base.T * (0.95 + rnd() * 0.1),
+  T: base.T * (1 - tSpread + rnd() * 2 * tSpread),
   s0: base.s0 * (s0Lo + rnd() * (s0Hi - s0Lo)),
   v0: want,
 });
@@ -2563,7 +2592,13 @@ function buildFleet(): Fleet {
     lens.push(SHAPES[sh]!.len);
     // 앞차들은 상용 ACC — 연구실 TR-C 논문이 실측한 스트링 불안정의 주인공이다.
     // 앞차들은 상용 ACC — 간격 편차가 사람보다 훨씬 좁다.
-    params.push(driver(PRESETS.accCommercial, rnd, v0, 0.72, 1.45));
+    /* 차두시간 ±12%: ±5% 로는 간격이 ±1m 라 대열이 자로 잰 듯 보였다. ±32% 는
+       파를 흡수해 02막이 죽는다(위 driver 주석). ±12% 는 간격 17~23m 로 눈에
+       고르지 않으면서 전파 판정이 유지되는 값이다(stage:check 로 확인).
+       자차(i = 0)는 잡음을 섞지 않는다 — 자차의 뒤처짐이 곧 도로 속도라, 잡음이
+       그대로 화면 전체의 떨림이 된다. */
+    const p = driver(PRESETS.accCommercial, rnd, v0, 0.72, 1.45, 0.12);
+    params.push(i === 0 ? p : { ...p, noise: FLEET_NOISE });
     jog[i] = (rnd() - 0.5) * 0.44;
   }
   const vehicles: Vehicle[] = [];
@@ -2814,6 +2849,8 @@ interface LoopState {
   inkTop: number;
   /** 완충된 재생 헤드. 음수 = 아직 모름(첫 프레임에 목표로 붙인다) */
   hpS: number;
+  /** 완충된 스크롤 위치(px). 도로가 쓰는 모든 값이 여기서 나온다. 음수 = 아직 모름 */
+  scrollS: number;
   /** 그린 프레임 번호 — 계측 전용 */
   frameN: number;
   /** 마지막으로 CSS 변수에 흘려보낸 값 — 안 바뀌면 DOM 을 건드리지 않는다 */
@@ -2949,6 +2986,7 @@ export function usePointCloud(
     inkLeft: Number.NaN,
     inkTop: Number.NaN,
     hpS: -1,
+    scrollS: -1,
     frameN: 0,
     cssH: Number.NaN,
     cssP: Number.NaN,
@@ -3093,6 +3131,23 @@ export function usePointCloud(
     const cars = carRef.current ?? (carRef.current = buildCars());
     const ped = pedRef.current ?? (pedRef.current = buildPed());
     const fleet = fleetRef.current ?? (fleetRef.current = buildFleet());
+
+    /* 차로 안의 느린 횡방향 흔들림(`WANDER_*`). 두 주기의 사인을 겹쳐 6~15초에
+       ±수 cm 를 오간다. 시뮬 시각(`fleet.t`)을 쓰므로 스크롤이 멈추면 같이 멈춘다.
+       **그리기·겹침 상자·V2V 링크·합류 목표가 전부 이 값을 쓴다** — 한 곳만 고정
+       오프셋을 쓰면 링크가 차 옆구리를 가리킨다. */
+    const wander = (seed: number, amp: number): number => {
+      const ph = seed * 2.399963;
+      const w1 = 0.45 + 0.09 * (seed % 5);
+      const w2 = 0.17 + 0.04 * (seed % 3);
+      return amp * (0.7 * Math.sin(fleet.t * w1 + ph) + 0.3 * Math.sin(fleet.t * w2 + ph * 1.7));
+    };
+    /** 우리 차로 k 번째. 자차(0)는 흔들지 않는다 — 카메라가 그 차다. */
+    const laneOf = (k: number): number =>
+      LANE_X + fleet.jog[k]! + (k === 0 ? 0 : wander(k, WANDER_ACC));
+    /** 옆 차로·마주 오는 차로(사람 운전). `id` 로 색인한다 — 링은 배열이 돈다. */
+    const colLane = (ci: number, col: Column, id: number): number =>
+      col.x + col.jog[id]! + wander(11 + ci * 17 + id, WANDER_HUMAN);
     const pal = palRef.current ?? (palRef.current = buildPalette());
     const actK = actRef.current;
     const actT = actTRef.current;
@@ -3162,7 +3217,24 @@ export function usePointCloud(
     /* --- 스크롤 읽기 --------------------------------------------------
        스크롤은 오직 여기, rAF 안에서만 읽는다. scroll 리스너도 setState 도 없다.
        문서 전체가 주행 구간이다 — 히어로부터 푸터의 주소까지.             */
-    const scrollY = still ? 0 : window.scrollY || window.pageYOffset || 0;
+    const scrollRaw = still ? 0 : window.scrollY || window.pageYOffset || 0;
+    /* **스크롤 입력에 완충을 건다.** 휠 한 칸은 브라우저가 계단으로 보내는데, 그
+       계단을 도로가 그대로 받으면 화면 대부분(도로)이 뚝뚝 끊긴다("휠 내릴 때마다
+       뚝뚝 끊기는 느낌" — 교수님). 스크롤 하이재킹이 아니다: 문서는 브라우저가
+       평소대로 굴리고 **도로가 그 값을 시간상수로 뒤따를 뿐**이라, 접근성도
+       네이티브 스크롤도 그대로다.
+
+       "스크롤이 멈추면 도로도 멈춘다"는 지켜진다 — 멈춘 뒤 τ 몇 배 안에 0.5px
+       안으로 들어오면 **스냅**해서 정지 프레임 건너뛰기가 다시 선다. */
+    if (still || st.scrollS < 0) st.scrollS = scrollRaw;
+    else {
+      const scrollTau = mobile ? SCROLL_TAU_TOUCH : SCROLL_TAU;
+      st.scrollS += (scrollRaw - st.scrollS) * (dt > 0 ? 1 - Math.exp(-dt / scrollTau) : 1);
+      if (Math.abs(scrollRaw - st.scrollS) < 0.5) st.scrollS = scrollRaw;
+    }
+    const scrollY = st.scrollS;
+    /** 실제 스크롤이 완충된 값보다 앞서 간 거리(px). rect 를 이만큼 되돌린다. */
+    const scrollLag = scrollRaw - scrollY;
 
     // 문서 높이는 매 프레임 재지 않는다(레이아웃 강제). 0.3초마다 갱신하면 충분하다.
     if (st.docAt < 0 || elapsed - st.docAt > 0.3) {
@@ -3233,10 +3305,12 @@ export function usePointCloud(
     for (let i = 0; i < ACTS; i++) actT[i] = Number.NEGATIVE_INFINITY;
     if (st.phaseEl) {
       const r = st.phaseEl.getBoundingClientRect();
-      // 무대 상단의 **문서 좌표** — 여는 화면의 길이가 곧 이 값이다(아래 hp).
-      stageDocY = r.top + scrollY;
+      /* 무대 상단의 **문서 좌표** — 여는 화면의 길이가 곧 이 값이다(아래 hp).
+         rect 는 실제 스크롤 기준이라, 도로가 쓰는 값은 완충된 시계로 되돌린다
+         (`scrollLag` 만큼 아래에 있었던 셈). */
+      stageDocY = r.top + scrollRaw;
       // 무대 상단이 뷰포트 바닥에 닿으면 0, 뷰포트 상단까지 올라오면 1
-      approach = clamp01((H - r.top) / Math.max(1, H));
+      approach = clamp01((H - (r.top + scrollLag)) / Math.max(1, H));
       const deck = st.deckEl;
       if (deck) {
         /* 가로 덱 — 재생 헤드가 **넘김**이다. `t` 는 그 패널이 제자리에서 얼마나
@@ -3271,7 +3345,7 @@ export function usePointCloud(
       } else {
         for (let i = 0; i < st.actEls.length && i < ACTS; i++) {
           const ar = st.actEls[i]!.getBoundingClientRect();
-          actT[i] = (line - ar.top) / Math.max(1, ar.height);
+          actT[i] = (line - (ar.top + scrollLag)) / Math.max(1, ar.height);
         }
       }
     } else if (still) {
@@ -3763,6 +3837,8 @@ export function usePointCloud(
           st.brakePrev = braking;
           const yieldNow = fleet.yield > 0.02 ? YIELD_ACCEL * fleet.yield : 0;
           step(vehicles, SIM_DT, {
+            // 앞 대열의 가속 잡음(`FLEET_NOISE`)은 난수원이 있어야 먹는다.
+            rng: fleet.rng,
             override: (_v, i) =>
               braking && i === last
                 ? ACT_BRAKE
@@ -4759,7 +4835,7 @@ export function usePointCloud(
         const va = k === 0 ? egoA : clamp01((fleetG - order * 0.62) / 0.2);
         if (va <= 0.02 && slots.laneN[k]! === 0) continue;
         const sh = cars[fleet.shape[k]!]!;
-        const lane = LANE_X + fleet.jog[k]!;
+        const lane = laneOf(k);
         box(dz0, lane, veh.length, sh.shape.wid);
         drawCar(
           sh.rear,
@@ -4887,7 +4963,7 @@ export function usePointCloud(
           if (dz0 < 0) dz0 += SCENE_LEN;
           if (dz0 < near || dz0 > FAR) continue;
           const sh = cars[col.shape[veh.id]!]!;
-          let lane = col.x + col.jog[veh.id]!;
+          let lane = colLane(ci, col, veh.id);
           let a = fleetG;
           // 04막: 옆 차로 한 대가 협조 합류로 우리 차로에 들어온다.
           // 횡·종방향을 **같은 진행도로 함께** 옮긴다 — 옆으로만 밀면 몸통이 겹친다.
@@ -5063,7 +5139,7 @@ export function usePointCloud(
            멀리 늘어선 것들만 남긴다(카메라가 오르는 도중 `back` 이 짧을 때 특히). */
         if (dz0 < BAR_NEAR || dz0 > FAR) continue;
         const wz = camZ + dz0;
-        const lane = LANE_X + fleet.jog[k]!;
+        const lane = laneOf(k);
         // 막대는 차 왼쪽(글이 앉는 쪽 반대편이 아니라 차로 안쪽)에 세운다.
         const bx = curveX(wz) + lane - 1.35;
         const by = curveY(wz);
@@ -5151,7 +5227,7 @@ export function usePointCloud(
         const roof = cars[col.shape[veh.id]!]!.shape.roof;
         for (let i = 0; i < 6; i++) {
           emit(
-            curveX(wz) + col.x + col.jog[veh.id]!,
+            curveX(wz) + colLane(0, col, veh.id),
             curveY(wz) + roof + 0.2 + i * 0.14,
             dz0 + 2.2,
             RAMP_BUCKETS - 1,
@@ -5302,10 +5378,10 @@ export function usePointCloud(
         const lead = vehicles[k + 1]!;
         link(
           camZ + (me.x - egoX + back) - 0.6,
-          LANE_X + fleet.jog[k]!,
+          laneOf(k),
           cars[fleet.shape[k]!]!.shape.roof + 0.18,
           camZ + (lead.x - lead.length - egoX + back) + 0.6,
-          LANE_X + fleet.jog[k + 1]!,
+          laneOf(k + 1),
           cars[fleet.shape[k + 1]!]!.shape.roof + 0.18,
           0.8 * aLink,
         );
@@ -5330,7 +5406,7 @@ export function usePointCloud(
             lane,
             roof,
             pz,
-            LANE_X + fleet.jog[MERGE_PARTNER]!,
+            laneOf(MERGE_PARTNER),
             cars[fleet.shape[MERGE_PARTNER]!]!.shape.roof + 0.18,
             1 * aLink,
           );
