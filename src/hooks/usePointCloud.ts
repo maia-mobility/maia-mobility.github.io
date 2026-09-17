@@ -2006,6 +2006,12 @@ const GLYPH_HOLD_PX = 250;
  * 위치와 무관하다 — 손가락을 한 번 굴리면 바로 시작한다.
  */
 const GLYPH_START_PX = 16;
+/**
+ * 재생 헤드가 스크롤을 뒤따르는 시간상수(s). 휠 한 칸(브라우저가 100~200ms 에
+ * 걸쳐 보내는 계단)을 서른 프레임 남짓에 편다. 도로가 아니라 **글자 연출만**
+ * 이 완충을 쓴다 — "스크롤이 곧 주행"은 도로의 규칙이다.
+ */
+const HP_TAU = 0.3;
 
 /** 도착 상한. hp = 1 에서는 **전부** 자리 잡아 있어야 한다. */
 const GLYPH_END = 0.97;
@@ -2017,7 +2023,7 @@ const GLYPH_SAG = 0.04;
  * **풀어지는 구간의 길이(스크롤 px).** 치환이 끝난 점-글자가 제자리에서 흐트러진다.
  * 여기까지는 아직 아무도 떠나지 않는다.
  */
-const GLYPH_LOOSEN_PX = 100;
+const GLYPH_LOOSEN_PX = 150;
 /**
  * **조립 구간의 길이(스크롤 px).** 점마다 **출발 시각이 이 구간 전체에 흩뿌려진다**.
  *
@@ -2026,23 +2032,32 @@ const GLYPH_LOOSEN_PX = 100;
  * (교수님: "여기서 차량이 되는 과정이 아예 빠져 있어"). 출발을 흩뿌리면 어느
  * 프레임을 잘라도 글자 자리에 남은 점 · 공중의 줄기 · 앉은 점이 함께 보인다.
  */
-const GLYPH_ASM_PX = 500;
-/** **한 점**이 글자에서 차까지 가는 거리(스크롤 px). 짧아야 줄기가 보인다. */
-const GLYPH_FLY_ONE_PX = 80;
+const GLYPH_ASM_PX = 1120;
+/**
+ * **한 점**이 글자에서 차까지 가는 거리(스크롤 px).
+ *
+ * 80px 이었을 때는 **휠 한 칸(≈100px)에 점이 출발에서 도착까지 순간이동**했다 —
+ * 흐르는 것이 아니라 튀었다. 값을 정한 것은 **프레임당 이동량**이다: 글자에서
+ * 차까지가 화면에서 900px 쯤 되므로, 420px 짜리 비행이면 스크롤 1px 에 2.1px 씩
+ * 움직인다. 휠 한 칸이 재생 헤드 완충(`HP_TAU`)을 거쳐 서른 프레임에 퍼지면
+ * 프레임당 7px — 눈이 선을 잇는 범위다. 출발 흩뿌림(`GLYPH_ASM_PX − 이 값`)은
+ * 700px 이라 줄기는 여전히 끊기지 않는다.
+ */
+const GLYPH_FLY_ONE_PX = 420;
 /**
  * 모바일의 구간 배율. 데스크톱 기준(치환 250 · 풀어짐 100 · 조립 500 → 도착 866px)
  * 은 한 화면이 844px 인 전화에서 한 화면을 넘는다. 터치 한 번이 400~600px 이니
  * 0.7배면 도착이 611px — 손가락 한두 번이다.
  */
 const GLYPH_MOBILE_K = 0.7;
-/** 앉는 순간의 번쩍임 — 비행 길이 대비. 0.10 ≈ 스크롤 8px */
-const GLYPH_FLASH = 0.1;
+/** 앉는 순간의 번쩍임 — 비행 길이 대비. 0.15 ≈ 스크롤 45px */
+const GLYPH_FLASH = 0.15;
 /**
  * 번쩍임의 밝기 이득. 색은 **글자의 잉크 버킷 그대로** 쓴다 — `--fg` 버킷(11)로
  * 올리면 후광(halo)이 붙어 3px 짜리 흰 덩어리가 되고, 조립 중인 차가 차가 아니라
  * 하얗게 끓는 덩어리로 보인다(실측 스크린샷).
  */
-const GLYPH_FLASH_GAIN = 0.45;
+const GLYPH_FLASH_GAIN = 0.2;
 /** 이만큼 잦아들면 차체 색으로 넘어간다. */
 const GLYPH_FLASH_SWAP = 0.5;
 /** 조립 순서에 주는 흔들림 — 완벽한 평면 스윕은 기계적으로 보인다. */
@@ -2086,6 +2101,12 @@ interface Glyphs {
   b: Uint8Array;
   /** 드리프트 방향·세기 −1…1. 조립 순서의 흔들림도 여기서 나온다. */
   dr: Float32Array;
+  /** 직전 프레임에 찍은 화면 자리 — **프레임당 이동량**을 재는 계측용. NaN = 없음 */
+  lastX: Float32Array;
+  lastY: Float32Array;
+  /** 그때의 프레임 번호. **연속한 두 프레임**일 때만 이동량으로 친다 — 알파
+   *  문턱에서 깜빡여 몇 프레임 건너뛴 점을 "튄 것"으로 세면 안 된다. */
+  lastF: Float32Array;
   /** 우리 차로 대열이 받을 구간 [시작, 개수] */
   laneOff: number;
   laneN: number;
@@ -2331,6 +2352,9 @@ function bakeGlyphs(
     a: new Float32Array(n),
     b: new Uint8Array(n),
     dr: new Float32Array(n),
+    lastX: new Float32Array(n).fill(Number.NaN),
+    lastY: new Float32Array(n).fill(Number.NaN),
+    lastF: new Float32Array(n).fill(-9),
     laneOff: 0,
     laneN: lane.length,
     nextOff: lane.length,
@@ -2707,6 +2731,13 @@ export interface RoadProbe {
     stay: number;
     air: number;
     land: number;
+    /** 공중에 있는 글자 점의 **프레임당 화면 이동량**(px) — 평균 / 최대 */
+    stepAvg: number;
+    stepMax: number;
+    /** 한 프레임에 12px 넘게 튄 점의 수 */
+    stepBig: number;
+    /** 완충된 재생 헤드 0…1 */
+    hp: number;
     /** 이번 프레임에 차에 자리 잡은 점 */
     seated: number;
     /** 자리를 못 얻어 흩어지는 점 */
@@ -2762,6 +2793,10 @@ interface LoopState {
   /** 붙어 있는 첫 화면 상자의 화면 위치 — 글자 점 좌표의 원점. NaN = 아직 모름 */
   inkLeft: number;
   inkTop: number;
+  /** 완충된 재생 헤드. 음수 = 아직 모름(첫 프레임에 목표로 붙인다) */
+  hpS: number;
+  /** 그린 프레임 번호 — 계측 전용 */
+  frameN: number;
   /** 마지막으로 CSS 변수에 흘려보낸 값 — 안 바뀌면 DOM 을 건드리지 않는다 */
   cssH: number;
   cssP: number;
@@ -2894,6 +2929,8 @@ export function usePointCloud(
     glyphSpan: -1,
     inkLeft: Number.NaN,
     inkTop: Number.NaN,
+    hpS: -1,
+    frameN: 0,
     cssH: Number.NaN,
     cssP: Number.NaN,
     cssV: -1,
@@ -3238,7 +3275,23 @@ export function usePointCloud(
       stageDocY > 0
         ? Math.max(1, stageDocY - H * 0.15)
         : Math.max(1, window.innerHeight * 0.85);
-    const hp = clamp01(scrollY / st.hpSpan);
+    /* **재생 헤드에는 시간 완충이 있다.** 스크롤 이벤트는 휠 한 칸을 100~200ms 에
+       걸쳐 계단으로 보내는데, 그 계단을 그대로 진행도로 쓰면 글자 점이 프레임마다
+       툭툭 건너뛴다. 목표는 스크롤에서 읽고 실제 값은 시간상수로 뒤따른다.
+
+       **도로(`camZ`)에는 걸지 않는다.** "스크롤이 곧 주행"은 도로의 규칙이고,
+       여기서 무르게 하는 것은 **글자의 재생 헤드뿐**이다.
+
+       지수 감쇠는 목표에 영원히 닿지 않으므로 충분히 가까워지면 붙인다 — 안 그러면
+       "정지 프레임은 통째로 건너뛴다" 판정이 영영 서지 않는다(§커서 = 센서의 지향
+       과 같은 이유). */
+    const hpTarget = clamp01(scrollY / st.hpSpan);
+    if (still || st.hpS < 0) st.hpS = hpTarget;
+    else {
+      st.hpS += (hpTarget - st.hpS) * (dt > 0 ? 1 - Math.exp(-dt / HP_TAU) : 1);
+      if (Math.abs(hpTarget - st.hpS) < 1e-4) st.hpS = hpTarget;
+    }
+    const hp = st.hpS;
 
     /* --- 조용한 영역 굽기 -------------------------------------------
        `data-quiet` 요소 **안의 글줄이 앉은 자리**에서 점의 알파를 떨어뜨린다.
@@ -4083,6 +4136,14 @@ export function usePointCloud(
     let landN = 0;
     /** 지금 그리는 차의 화면 폭(px) — 유령 계측의 자. `drawCar` 가 채운다. */
     let gCarPx = 0;
+    /** 프레임 번호 — 이동량을 **연속한 두 프레임**에서만 재려고 센다. */
+    const frameN = ++st.frameN;
+    /** 프레임당 화면 이동량(px) — 평균·최대. 부드러움을 수로 재는 창구. */
+    let stepSum = 0;
+    let stepN = 0;
+    let stepMax = 0;
+    /** 한 프레임에 12px 넘게 튄 점의 수 — 몇 개나 튀는가. */
+    let stepBig = 0;
 
     /** bin 에 넣는 마지막 한 걸음 — `emit` 의 꼬리와 같다. 글자 점 전용. */
     const putInk = (
@@ -4222,6 +4283,18 @@ export function usePointCloud(
          갈아탄 점. 공중에 있는 동안 뒤 둘이 0 이어야 한다. */
       moveSum += Math.abs(sx - lx) + Math.abs(sy - ly);
       moveN++;
+      // 프레임당 이동량 — 부드러움의 자다. 점이 튀면 여기가 커진다.
+      const px0 = gl.lastX[i]!;
+      if (px0 === px0 && gl.lastF[i] === frameN - 1) {
+        const d = Math.abs(sx - px0) + Math.abs(sy - gl.lastY[i]!);
+        stepSum += d;
+        stepN++;
+        if (d > stepMax) stepMax = d;
+        if (d > 12) stepBig++;
+      }
+      gl.lastX[i] = sx;
+      gl.lastY[i] = sy;
+      gl.lastF[i] = frameN;
       const near = gCarPx * 0.2 + 1;
       if (Math.abs(sx - tx) < near && Math.abs(sy - ty) < near) ghostN++;
       /* 색은 **앉는 순간에만** 갈아탄다. 공중의 점은 글자 색(흰색)이다 — 날아가는
@@ -5354,6 +5427,10 @@ export function usePointCloud(
             stay: 0,
             air: 0,
             land: 0,
+            stepAvg: 0,
+            stepMax: 0,
+            stepBig: 0,
+            hp: 0,
             seated: 0,
             lost: 0,
             group: [0, 0],
@@ -5465,6 +5542,10 @@ export function usePointCloud(
             ? clamp01((hp - gl.t0) / Math.max(1e-4, gl.done - gl.t0))
             : 0;
         mo.move = moveN ? moveSum / moveN : 0;
+        mo.stepAvg = stepN ? stepSum / stepN : 0;
+        mo.stepMax = stepMax;
+        mo.stepBig = stepBig;
+        mo.hp = hp;
         mo.clipTop = clipTop;
         mo.ghost = moveN ? ghostN / moveN : 0;
         mo.swapped = moveN ? swapN / moveN : 0;
