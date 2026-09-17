@@ -1553,6 +1553,23 @@ const JAM_ACCEL = -2.2;
 /* --- 03막 배차 차량 -------------------------------------------------- */
 /** 갓길 정차 위치(m). 길가장자리 실선(−7.9) 안쪽이라 인도를 밟지 않는다. */
 const TAXI_STOP_X = -7.3;
+/**
+ * 배차 차량의 동선은 **도로 기준**이다 — 카메라 기준이 아니다.
+ *
+ * 한때 `taxi.dz`(카메라로부터의 거리)를 진행도의 함수로 직접 정했다. 그러면 차가
+ * 카메라에 매달려 따라오고, "정차" 중에도 우리와 같은 속도로 굴러가며, 출발할 때는
+ * 한 막에 47m 를 앞서 나가려고 우리 속도의 네 배로 튀어 나갔다. 교수님이
+ * "주황색 막대 있는 놈 혼자 이상하게 다닌다"고 했다. 지금은 도로 위의 절대
+ * 위치(`taxi.z`)를 두고 **도로 대비 속도비**로 움직인다: 다가올 땐 우리보다
+ * 느리게(`TAXI_R_IN`) 달리다 서고, 서 있는 동안 우리가 그 옆을 지나가고, 승객이
+ * 타면 정상 속도로 빠져나가 우리 뒤로 사라진다. 길이는 한 막의 주행거리에 비례
+ * (`TAXI_SPAWN_K` × 한 막의 주행거리)해 창 높이가 달라도 같은 장면이다.
+ */
+const TAXI_SPAWN_K = 0.6;
+const TAXI_R_IN = 0.75;
+/** 출발 뒤 속도비. 1 보다 커야 우리 앞에 머물다 멀어진다 — 1 이면 옆에 붙어 따라오고,
+    다음 막에서 카메라가 뒤로 빠질 때 다시 화면에 들어온다. */
+const TAXI_R_OUT = 1.3;
 /** 승객이 인도에서 기다리는 자리와, 타러 나오는 자리(m). */
 const PAX_WAIT_X = -9.9;
 const PAX_BOARD_X = -8.5;
@@ -1599,6 +1616,10 @@ interface Taxi {
   x: number;
   shape: number;
   brake: boolean;
+  /** 도로 위의 절대 위치(`zAbs` 와 같은 자) — 차는 도로에 서 있지 카메라에 매달려 있지 않다 */
+  z: number;
+  /** 직전 프레임의 카메라 주행 위치 — 도로가 얼마나 흘렀는지 재는 기준 */
+  lastZ: number;
   /** 승객 — 거리·횡위치·걸음 위상·탑승 완료 */
   paxDz: number;
   paxX: number;
@@ -2649,6 +2670,8 @@ function buildFleet(): Fleet {
     taxi: {
       on: 0,
       dz: 0,
+      z: 0,
+      lastZ: Number.NaN,
       x: LANE_NEXT,
       shape: 0,
       brake: false,
@@ -3946,27 +3969,44 @@ export function usePointCloud(
        천천히 지나는 동안 승객이 걸어와 타고, 차가 떠난다.                     */
     const u3 = actU[ACT_SERVICE]!;
     const taxi = fleet.taxi;
+    /** 한 막을 지나는 동안의 주행거리(m). 막은 한 화면이라 창 높이가 정한다. */
+    const actRun = H * M_PER_PX;
     if (actK[ACT_SERVICE]! > 0.05 && !taxi.on) {
       taxi.on = 1;
       taxi.shape = 0;
       taxi.paxGone = 0;
       taxi.paxPh = 0;
+      /* 도로 위 한 자리에 세운다 — 이 뒤로는 도로가 흐른 만큼만 움직인다.
+         기준은 **자차**(`zAbs + back`)다. 02→03 전환 중에는 카메라가 자차보다 22m
+         뒤에 있어서, 카메라 앞 거리로 세우면 카메라가 자차 자리로 따라붙는 순간
+         택시가 코앞에 온다(실측: 정차 거리 17m 가 0.4m 로). */
+      taxi.z = zAbs + back + TAXI_SPAWN_K * actRun;
+      taxi.lastZ = st.camZ;
     } else if (actK[ACT_SERVICE]! <= 0.01) {
       taxi.on = 0;
+      taxi.lastZ = Number.NaN;
     }
     if (taxi.on) {
       const u = clamp01(u3);
-      // 접근(60→24) → 우리가 지나가며 가까워짐(24→13) → 출발(13→58)
-      // 거리는 눈으로 골랐다 — 44m 에서 다가와 17m 에 서야 사람이 걸어오는 것이 보인다.
-      taxi.dz =
+      /* 도로가 이번 프레임에 흐른 거리. 스크롤을 되올리면 음수 — 그러면 차도
+         되감긴다(연출 전체가 스크롤에 가역이다). */
+      const adv = Number.isNaN(taxi.lastZ) ? 0 : st.camZ - taxi.lastZ;
+      taxi.lastZ = st.camZ;
+      /* 도로 대비 속도비: 느리게 다가와(0.75) 서고(0), 승객이 타면 정상 속도(1)로.
+         정차 지점은 우리보다 앞이라(한 막의 0.8 주행거리 앞에서 출발해 0.3 에
+         선다) 장면 내내 우리 앞에 있고, 출발하면 정상보다 조금 빠르게 멀어진다.
+         막이 끝나 놓아줄 때는 이미 20m 넘게 앞이라 막 전환의 페이드에 묻힌다. */
+      const r =
         u < 0.3
-          ? 44 - 27 * smooth(u / 0.3)
+          ? TAXI_R_IN * (1 - smooth(u / 0.3))
           : u < 0.62
-            ? 17 - 6 * ((u - 0.3) / 0.32)
-            : 11 + 45 * smooth((u - 0.62) / 0.38);
-      // 차로 → 갓길 → 차로
+            ? 0
+            : TAXI_R_OUT * smooth((u - 0.62) / 0.23);
+      taxi.z += r * adv;
+      taxi.dz = taxi.z - zAbs;
+      // 차로 → 갓길 → 차로. 빠져나오는 것은 우리가 지나치는 순간에 시작한다.
       const out = smooth(clamp01((u - 0.16) / 0.22));
-      const back2 = smooth(clamp01((u - 0.72) / 0.2));
+      const back2 = smooth(clamp01((u - 0.64) / 0.16));
       taxi.x = LANE_NEXT + (TAXI_STOP_X - LANE_NEXT) * (out - back2);
       taxi.brake = u > 0.17 && u < 0.34;
       // 승객은 차 바로 앞 인도에서 기다리다 걸어 나온다.
