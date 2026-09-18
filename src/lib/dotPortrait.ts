@@ -44,6 +44,11 @@ export function mountDotPortrait(
   const ctx = canvas.getContext('2d', { alpha: true });
   const src = canvas.dataset.src;
   if (!ctx || !src) return () => {};
+  /* 마크업이 시간을 정할 수 있다(`data-duration`, 초). 명단의 사진 셋이 교수님
+     사진과 같은 1.4초로 하나씩 모이면 연출이 아니라 **느린 로딩**으로 읽혔다
+     (교수님: "왜 member 사진은 천천히 떠?"). 조서의 한 장은 길게, 명단은 짧게. */
+  const dur = Number(canvas.dataset.duration);
+  if (Number.isFinite(dur) && dur > 0) duration = dur;
 
   const wrap = canvas.closest<HTMLElement>('[data-dot-wrap]');
 
@@ -221,7 +226,10 @@ export function mountDotPortrait(
           io?.disconnect(); // 한 번 해상되면 다시 흩어지지 않는다
         }
       },
-      { rootMargin: '-10% 0px' },
+      /* 화면에 들어오기 조금 **전**에 시작한다. 예전엔 10% 안으로 들어와야 시작해서,
+         아래쪽 사진은 스크롤해 내려간 뒤에야 점이 모이기 시작했다 — 그 기다림이
+         "천천히 뜬다"의 절반이었다. */
+      { rootMargin: '12% 0px' },
     );
     io.observe(canvas);
   } else if (!reduced) {

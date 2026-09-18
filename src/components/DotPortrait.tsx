@@ -10,6 +10,8 @@ export interface DotPortraitProps {
   width: number;
   height: number;
   className?: string;
+  /** 점군이 사진으로 모이는 시간(초). 기본 1.4 — 명단처럼 여럿이 나란히면 짧게. */
+  duration?: number;
 }
 
 /**
@@ -28,6 +30,7 @@ export default function DotPortrait({
   width,
   height,
   className,
+  duration,
 }: DotPortraitProps) {
   /* `public/` 자산이라 하위 경로 배포에서는 base 가 앞에 붙어야 한다.
      여기 한 곳에서 붙이면 <img> 와 캔버스가 읽는 data-src 가 함께 맞는다. */
@@ -48,7 +51,13 @@ export default function DotPortrait({
         decoding="async"
       />
 
-      <canvas data-dot-portrait data-src={url} className={s.canvas} aria-hidden="true" />
+      <canvas
+        data-dot-portrait
+        data-src={url}
+        data-duration={duration}
+        className={s.canvas}
+        aria-hidden="true"
+      />
 
       {label && (
         <span className={s.chip} aria-hidden="true">
