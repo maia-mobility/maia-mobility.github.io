@@ -23,6 +23,9 @@
 기준으로 맞추면 학생 사진을 **축소**해야 하고 가슴 아래에 없는 부분을 채워야 했다
 (늘린 정장이 줄무늬가 된다). 넷 중 가장 타이트한 사진이 채움 없이 들어가는 값이
 0.53 이고, 교수님 사진은 그만큼 더 확대·크롭했다. 새 구성원도 같은 값으로 낸다.
+
+`--bg #f3f2f0` 을 주면 배경을 그 색으로 통일한다(Vision 인물 분리, `person-mask.swift`).
+증명사진의 배경은 흰색·회색·라벤더로 제각각이라 나란히 놓으면 얼룩이 됐다.
 """
 import argparse
 import os
@@ -92,6 +95,34 @@ def background(im: np.ndarray) -> tuple:
     return tuple(int(v) for v in np.median(patch, axis=0))
 
 
+def person_mask(path: str, shape) -> np.ndarray | None:
+    """Vision 인물 분리 마스크(0~1, 사진 크기). 실패하면 None."""
+    here = os.path.dirname(os.path.abspath(__file__))
+    tmp = tempfile.NamedTemporaryFile(suffix=".png", delete=False).name
+    r = subprocess.run(["swift", os.path.join(here, "person-mask.swift"), path, tmp], capture_output=True, text=True)
+    if r.returncode != 0:
+        return None
+    m = cv2.imread(tmp, cv2.IMREAD_GRAYSCALE)
+    os.unlink(tmp)
+    if m is None:
+        return None
+    m = cv2.resize(m, (shape[1], shape[0]), interpolation=cv2.INTER_LINEAR).astype(np.float32) / 255.0
+    # 머리카락 가장자리를 몇 px 부드럽게 — 칼로 오린 듯한 윤곽을 피한다
+    k = max(3, (min(shape[:2]) // 300) | 1)
+    return cv2.GaussianBlur(m, (k, k), 0)
+
+
+def replace_background(im: np.ndarray, path: str, hex_color: str) -> np.ndarray:
+    """사람만 남기고 배경을 한 색으로. 증명사진 배경이 사람마다 달라서 명단이 얼룩졌다."""
+    m = person_mask(path, im.shape)
+    if m is None:
+        sys.exit("인물 분리에 실패했다 — Vision 이 없는 환경이면 --bg 를 빼고 돌려라")
+    c = hex_color.lstrip("#")
+    bgr = np.array([int(c[4:6], 16), int(c[2:4], 16), int(c[0:2], 16)], dtype=np.float32)
+    a = m[..., None]
+    return (im.astype(np.float32) * a + bgr * (1 - a)).astype(np.uint8)
+
+
 def fit(im: np.ndarray, face_w_rel: float, eye_rel: float, path: str) -> np.ndarray:
     cx, eye_y, fw = face_of(im, path)
     s = (face_w_rel * OUT_W) / fw  # 배율 — 얼굴 폭을 기준에 맞춘다
@@ -129,6 +160,7 @@ def main() -> None:
     ap.add_argument("--quality", type=int, default=86)
     ap.add_argument("--face", type=float, help="틀 폭 대비 얼굴 폭. 주면 --ref 대신 이 값")
     ap.add_argument("--eye", type=float, help="틀 높이 대비 눈높이. 주면 --ref 대신 이 값")
+    ap.add_argument("--bg", help="배경을 이 색(#rrggbb)으로 통일한다 — 사람만 남기고 바꾼다")
     a = ap.parse_args()
 
     if a.face is not None and a.eye is not None:
@@ -142,7 +174,10 @@ def main() -> None:
         face_w_rel = a.face if a.face is not None else ref_fw / rw
         eye_rel = a.eye if a.eye is not None else ref_eye / ref_win_h
 
-    out = fit(load(a.src), face_w_rel, eye_rel, a.src)
+    src = load(a.src)
+    if a.bg:
+        src = replace_background(src, a.src, a.bg)
+    out = fit(src, face_w_rel, eye_rel, a.src)
     os.makedirs(os.path.dirname(os.path.abspath(a.dst)), exist_ok=True)
     cv2.imwrite(a.dst, out, [cv2.IMWRITE_JPEG_QUALITY, a.quality])
     cx, ey, fw = face_of(out, a.dst)

@@ -144,9 +144,9 @@ export const MEMBERS: Person[] = [
     role: UNDERGRAD,
     photo: '/images/people/choi-woojin.jpg',
     topics: [
-      { en: 'Connected vehicles (V2X)', ko: 'V2X 커넥티드 차량' },
-      { en: 'Cooperative driving', ko: '협력 주행' },
-      { en: 'Vehicle trajectory data', ko: '차량 궤적 데이터' },
+      { en: 'Vision-language models (VLM)', ko: '비전-언어 모델(VLM)' },
+      { en: 'Driving scene understanding', ko: '주행 장면 이해' },
+      { en: 'Multimodal perception', ko: '멀티모달 인식' },
     ],
   },
 ];
