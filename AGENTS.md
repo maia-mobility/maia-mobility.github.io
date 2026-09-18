@@ -86,7 +86,7 @@ grep -rnE "\.arc\(" src/hooks src/components                        # 캔버스 
 |---|---|
 | 논문 추가 | `src/data/publications.ts` — 배열 맨 앞에 한 항목 |
 | 뉴스 추가 | `src/data/news.ts` |
-| 구성원 추가 | `src/data/people.ts` 의 `MEMBERS` |
+| 구성원 추가 | `src/data/people.ts` 의 `MEMBERS`. 사진은 원본을 `pic/`(git 무시)에 두고 `python3 scripts/fit-portrait.py pic/원본 public/images/people/<id>.jpg --face 0.53 --eye 0.34` 로 낸 사본만 넣는다 — 얼굴 폭·눈높이가 전원 같아진다(macOS Vision, 로컬) |
 | 강의 추가 | `src/data/teaching.ts` |
 | 연구분야 수정 | `src/data/research.ts` |
 | 연락처·주소 | `src/data/site.ts` |

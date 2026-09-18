@@ -140,17 +140,33 @@ const CV = [
 
     {
       MEMBERS.length > 0 ? (
-        <ol class="cv">
+        /* 구성원 — 사진 · 이름 · 직함 · 관심 주제. 교수님 조서와 같은 어휘(점으로
+           해상되는 사진, 본문색 이름, 한 단 내려앉은 직함, 모노 낱말 줄)를 작게 쓴다.
+           카드 테두리·그림자는 없다 — 사진의 코너 틱이 이미 칸을 긋는다. */
+        <ul class="people">
           {MEMBERS.map((m) => (
-            <li>
-              <span class="period">{m.since ?? ''}</span>
-              <div class="entry">
+            <li class="person">
+              {m.photo ? (
+                <DotPortrait
+                  src={m.photo}
+                  alt={t(m.name)}
+                  label={m.id.replace(/-/g, '_')}
+                  width={3}
+                  height={4}
+                />
+              ) : null}
+              <div class="who">
                 <p class="eRole">{t(m.name)}</p>
-                <p class="eDetail">{t(m.role)}</p>
+                <p class="eOrg">{t(m.role)}</p>
+                {m.topics ? (
+                  <ul class="topics">
+                    {m.topics.map((k) => <li>{t(k)}</li>)}
+                  </ul>
+                ) : null}
               </div>
             </li>
           ))}
-        </ol>
+        </ul>
       ) : (
         <div class="open">
           <p class="openText">{t(UI.membersEmpty)}</p>
@@ -452,6 +468,45 @@ const CV = [
   }
 
   /* ---- 명단 ----------------------------------------------------------- */
+  .people {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    /* 사진 폭(190px)에 글이 붙는 칸. 넓은 화면에서 셋이 한 줄, 좁으면 접힌다. */
+    grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+    gap: var(--space-6) var(--space-5);
+  }
+  .person {
+    display: grid;
+    gap: var(--space-3);
+    justify-items: start;
+    min-inline-size: 0;
+  }
+  .who {
+    display: grid;
+    gap: var(--space-05);
+    min-inline-size: 0;
+  }
+  /* 관심 주제 — 홈의 키워드 줄과 같은 규칙. 구분점은 앞 낱말에 붙는다. */
+  .topics {
+    list-style: none;
+    margin: var(--space-1) 0 0;
+    padding: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-05) 0;
+    font-family: var(--font-mono);
+    font-size: var(--t-micro);
+    line-height: var(--lh-mono);
+    letter-spacing: var(--track-mono-read);
+    color: var(--fg-mute);
+  }
+  .topics li:not(:last-child)::after {
+    content: '·';
+    padding-inline: 0.7em;
+    color: var(--line-hot);
+  }
   .roster {
     display: grid;
     gap: var(--space-4);

@@ -18,3 +18,6 @@ _archive/
 
 # macOS
 .DS_Store
+
+# 구성원 사진 원본 — 사이트에는 scripts/fit-portrait.py 로 맞춘 사본만 들어간다
+pic/

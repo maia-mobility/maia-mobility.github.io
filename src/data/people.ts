@@ -23,6 +23,8 @@ export interface Person {
   experience?: CVEntry[];
   /** 연구 관심사 — research.ts 의 id 를 참조. */
   interests?: string[];
+  /** 관심 주제 — 학생은 연구분야 id 가 아니라 제 말로 적는다. 명단에 낱말 줄로 선다. */
+  topics?: I18nText[];
 }
 
 export const PI: Person = {
@@ -101,10 +103,53 @@ export const PI: Person = {
 };
 
 /**
- * 연구실은 2026년 3월 개설. 기존 사이트에 학생 명단이 없어 비어 있다.
- * 구성원이 생기면 여기에 추가하면 People 페이지에 자동으로 렌더된다.
+ * 연구실은 2026년 3월 개설. 첫 학부연구생 셋(2026.09). 사진은 `pic/` 의 원본을
+ * `scripts/fit-portrait.py` 로 교수님 사진과 같은 얼굴 폭·눈높이의 3:4 틀에 맞춘
+ * 사본이다 — 원본을 그대로 넣지 마라(프레임·얼굴 크기가 제각각이라 명단이 아니라
+ * 짜깁기로 보인다). 관심 주제는 학생과 상의한 문안이 아니라 연구실 분야에 맞춰 둔
+ * 초안이다 — 학생이 정하면 여기서 고친다.
  */
-export const MEMBERS: Person[] = [];
+/** 학부연구생 공통 직함. 학생이 더 생기면 같은 값을 쓴다. */
+const UNDERGRAD: I18nText = { en: 'Undergraduate Researcher', ko: '학부연구생' };
+
+export const MEMBERS: Person[] = [
+  {
+    id: 'lee-seyeon',
+    name: { en: 'Lee Seyeon', ko: '이세연' },
+    latin: 'Lee, S.',
+    role: UNDERGRAD,
+    photo: '/images/people/lee-seyeon.jpg',
+    topics: [
+      { en: 'Traffic simulation', ko: '교통 시뮬레이션' },
+      { en: 'Mixed autonomy traffic', ko: '자율주행 혼합교통' },
+      { en: 'Data-driven traffic analysis', ko: '교통 데이터 분석' },
+    ],
+  },
+  {
+    id: 'jo-sungpil',
+    name: { en: 'Jo Sungpil', ko: '조성필' },
+    latin: 'Jo, S.',
+    role: UNDERGRAD,
+    photo: '/images/people/jo-sungpil.jpg',
+    topics: [
+      { en: 'Reinforcement learning for signal control', ko: '강화학습 기반 신호 제어' },
+      { en: 'Ramp metering', ko: '램프 미터링' },
+      { en: 'Deep learning', ko: '딥러닝' },
+    ],
+  },
+  {
+    id: 'choi-woojin',
+    name: { en: 'Choi Woojin', ko: '최우진' },
+    latin: 'Choi, W.',
+    role: UNDERGRAD,
+    photo: '/images/people/choi-woojin.jpg',
+    topics: [
+      { en: 'Connected vehicles (V2X)', ko: 'V2X 커넥티드 차량' },
+      { en: 'Cooperative driving', ko: '협력 주행' },
+      { en: 'Vehicle trajectory data', ko: '차량 궤적 데이터' },
+    ],
+  },
+];
 
 export const ALUMNI: Person[] = [];
 
