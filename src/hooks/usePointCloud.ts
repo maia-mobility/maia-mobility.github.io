@@ -2129,9 +2129,20 @@ const GLYPH_ORD_JITTER = 0.06;
  * 글이 성긴 격자가 아니라 **면**으로 읽힌다. 여분은 닿기 직전에 스러진다.
  */
 const GLYPH_DUP_MAX = 6;
-/** 수렴 전 드리프트(px) — 글자가 **자기 자리에서** 풀어지는 정도. 가로·세로. */
+/**
+ * 수렴 전 드리프트(px) — 글자가 **자기 자리에서** 풀어지는 정도. 가로·세로.
+ *
+ * 세로는 **아래로 처지되, 한쪽으로만 밀지 않는다.** 예전에는 모든 점이 최소
+ * 0.45배(31px)씩 내려갔다 — 그러면 글 덩어리의 **윗변이 그대로 직선**으로 남아
+ * 태그라인·소개문 자리가 흐트러진 글이 아니라 **잘라 붙인 직사각형**으로
+ * 보였다(교수님 스크린샷: 두 번째 점구름의 윗변이 칼같이 곧았다). 지금은
+ * 두 난수의 평균(삼각분포, `GLYPH_DRIFT_UP`…1)으로 흩는다 — 무게는 아래에
+ * 있지만 위로도 조금 번져 윗변이 90px 남짓에 걸쳐 풀린다.
+ */
 const GLYPH_DRIFT_X = 45;
 const GLYPH_DRIFT_Y = 70;
+/** 세로 드리프트의 위쪽 끝(배). 음수 = 위로도 이만큼 번진다. */
+const GLYPH_DRIFT_UP = -0.2;
 /**
  * 글자 점이 켜지는 구간(**치환 구간 대비** 비율). 치환보다 조금 빨리 끝난다 —
  * DOM 글자가 마지막으로 옅어지는 동안 점은 이미 다 켜져 있어야, 글자가 꺼지는
@@ -2168,6 +2179,11 @@ interface Glyphs {
   b: Uint8Array;
   /** 드리프트 방향·세기 −1…1. 조립 순서의 흔들림도 여기서 나온다. */
   dr: Float32Array;
+  /**
+   * 세로 드리프트 0…1 — `dr` 과 독립인 난수 둘의 평균(삼각분포). 가로와 같은
+   * 난수를 쓰면 가로로 멀리 간 점이 꼭 아래로도 멀리 가서 X 자로 흩어진다.
+   */
+  dv: Float32Array;
   /** 직전 프레임에 찍은 화면 자리 — **프레임당 이동량**을 재는 계측용. NaN = 없음 */
   lastX: Float32Array;
   lastY: Float32Array;
@@ -2419,6 +2435,7 @@ function bakeGlyphs(
     a: new Float32Array(n),
     b: new Uint8Array(n),
     dr: new Float32Array(n),
+    dv: new Float32Array(n),
     lastX: new Float32Array(n).fill(Number.NaN),
     lastY: new Float32Array(n).fill(Number.NaN),
     lastF: new Float32Array(n).fill(-9),
@@ -2446,6 +2463,7 @@ function bakeGlyphs(
        어느 차의 어느 자리로 가느냐가 정하므로 프레임에서 계산한다(`drawCar`).
        여기서는 드리프트 방향과 순서의 흔들림만 굽는다. */
     out.dr[i] = rnd() * 2 - 1;
+    out.dv[i] = (rnd() + rnd()) * 0.5;
   }
   return out;
 }
@@ -4370,7 +4388,10 @@ export function usePointCloud(
       const dr = gl.dr[i]!;
       const bx = lx + dr * GLYPH_DRIFT_X * drift;
       const by =
-        ly + (0.45 + 0.55 * (dr < 0 ? -dr : dr)) * GLYPH_DRIFT_Y * drift;
+        ly +
+        (GLYPH_DRIFT_UP + (1 - GLYPH_DRIFT_UP) * gl.dv[i]!) *
+          GLYPH_DRIFT_Y *
+          drift;
       const sx = bx + (tx - bx) * c;
       if (sx < -8 || sx > W + 8) return;
       // 아래로 처지는 호. 직선으로 이으면 글자에서 차까지가 **하늘을 가로지르는
@@ -5066,7 +5087,12 @@ export function usePointCloud(
           const dr = gl.dr[i]!;
           const sx = lx + dr * GLYPH_DRIFT_X * e + (ax - lx) * e * 0.12;
           if (sx < -8 || sx > W + 8) continue;
-          const sy = ly + GLYPH_DRIFT_Y * e + (ay - ly) * e * 0.12;
+          const sy =
+            ly +
+            (GLYPH_DRIFT_UP + (1 - GLYPH_DRIFT_UP) * gl.dv[i]!) *
+              GLYPH_DRIFT_Y *
+              e +
+            (ay - ly) * e * 0.12;
           if (sy < -8 || sy > H + 8) continue;
           putInk(sx, sy, gl.b[i]!, a, (GLYPH_PS + 0.5) | 0);
         }
