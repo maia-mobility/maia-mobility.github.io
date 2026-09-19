@@ -288,7 +288,9 @@ export default function TrafficSim({ scenario, lang, compact = false }: TrafficS
           </div>
         )}
 
-        <canvas ref={canvasRef} className={s.canvas} aria-hidden="true" />
+        {/* `data-sim` 은 CSS 가 읽는다 — 장면 아래에 도표가 한 장 더 서는 01·02 는
+            좁은 화면에서 세로로 쌓이므로 캔버스가 더 높아야 한다. */}
+        <canvas ref={canvasRef} className={s.canvas} data-sim={scenario} aria-hidden="true" />
 
         {/* 모드·AV 대수를 바꾸면 측정이 처음부터 다시 시작한다. key 를 갈아 끼워
             수치판을 통째로 새로 마운트하면 이전 측정의 숫자가 한 프레임도 남지 않는다. */}

@@ -1443,12 +1443,18 @@ function drawRing(ctx: CanvasRenderingContext2D, W: number, H: number, sc: Scene
   const r = sc.ring!;
   const vs = sc.vehicles;
   const C = sc.circumference!;
+  /* 넓으면 링과 시공간도를 **나란히**, 좁고 캔버스가 넉넉하면 **세로로 쌓는다**
+     (위에 작은 링 · 아래는 폭을 다 쓰는 시공간도). 둘 다 안 되면(홈 패널 176px)
+     장면만 그린다 — 도표를 80px 안에 우겨 넣으면 한 줄이 1px 도 안 돼서 궤적이
+     아니라 얼룩이 된다. */
   const wide = W >= 520;
+  const stack = !wide && H >= 230;
   const ringW = wide ? Math.round(W * 0.34) : W;
+  const ringH = stack ? Math.round(H * 0.44) : H;
 
   const cx = ringW / 2;
-  const cy = H / 2;
-  const R = Math.max(24, Math.min(ringW * 0.46, H * 0.44) - 12);
+  const cy = ringH / 2;
+  const R = Math.max(24, Math.min(ringW * 0.46, ringH * 0.44) - 12);
   const s = (2 * Math.PI * R) / C; // px per m — 링의 축척
   const laneHalf = Math.max(2.5, (LANE_W / 2) * s);
 
@@ -1476,12 +1482,12 @@ function drawRing(ctx: CanvasRenderingContext2D, W: number, H: number, sc: Scene
     );
   }
 
-  if (!wide) return;
+  if (!wide && !stack) return;
 
   /* --- 시공간도 ----------------------------------------------------- */
-  const x0 = ringW + 24;
+  const x0 = wide ? ringW + 24 : PAD + 10;
   const x1 = W - PAD;
-  const y0 = PAD;
+  const y0 = wide ? PAD : ringH + 6;
   const y1 = H - PAD - 5;
   if (x1 - x0 < 60 || y1 - y0 < 40) return;
 
