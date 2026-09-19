@@ -124,50 +124,112 @@ const rgba = (c: RGB, a: number): string => `rgba(${c[0]},${c[1]},${c[2]},${a})`
 
 interface Palette {
   bg: string;
-  /** 도로 경계 점 */
+  /** 노면 — 배경보다 한 단 밝은 면(그림자 없이 깊이를 내는 유일한 수단) */
+  road: string;
+  /** 도로 가장자리 · 축 헤어라인 */
   line: string;
-  /** 차선 파선 · 눈금 */
+  /** 눈금 틱 */
   hot: string;
-  /** human = 앰버 */
-  human: string;
-  humanDim: string;
-  /** av = 시안 */
-  av: string;
-  avDim: string;
+  /** 지목(제어 AV 테두리 · 배차된 차 · 목적지) */
+  fg: string;
+  fgRGB: RGB;
+  /** 링크 · 경로 · 브래킷 — 읽히되 물러나 있는 계측선 */
+  fgSoft: string;
+  fgFaint: string;
   /** 제동등 = intensity 램프 최상단(적색) */
   brake: string;
-  mute: string;
-  /** 링크·마커 점멸 2단계 */
-  linkOn: string;
-  linkOff: string;
-  node: string;
-  nodeDone: string;
+  brakeDim: string;
+  /** 기다리는 수요 */
+  mark: string;
+  markDim: string;
+  /**
+   * 속도 램프 — 정지(--i-6 적) → 자유주행(--i-2 시안). **네 장면이 같은 램프를 쓴다.**
+   * 12버킷으로 양자화해 문자열을 미리 지어 둔다 — 프레임마다 색 문자열을 만들지 않고
+   * 버킷당 `fillStyle` 을 한 번만 건다(성능 예산 §7).
+   */
+  speed: string[];
+  speedRGB: RGB[];
+  /** 플래툰 v(t) 궤적 — 선두는 흐리고 후미로 갈수록 밝다(증폭이 읽히는 쪽을 세운다). */
+  trace: string[];
+}
+
+/** 속도 램프의 버킷 수. 12 = 노면에서 단계가 보이되 색이 튀지 않는 지점. */
+const SPEED_N = 12;
+
+/** 두 색 사이를 선형으로 나눠 램프를 만든다. */
+function ramp(stops: RGB[], n: number): RGB[] {
+  const out: RGB[] = [];
+  for (let i = 0; i < n; i++) {
+    const k = (i / (n - 1)) * (stops.length - 1);
+    const a = Math.min(stops.length - 1, Math.floor(k));
+    const b = Math.min(stops.length - 1, a + 1);
+    const f = k - a;
+    out.push([
+      Math.round(stops[a]![0] + (stops[b]![0] - stops[a]![0]) * f),
+      Math.round(stops[a]![1] + (stops[b]![1] - stops[a]![1]) * f),
+      Math.round(stops[a]![2] + (stops[b]![2] - stops[a]![2]) * f),
+    ]);
+  }
+  return out;
 }
 
 function buildPalette(): Palette {
   const bg = readToken('--bg');
+  const raise = readToken('--bg-raise');
   const line = readToken('--line');
   const hot = readToken('--line-hot');
-  const human = readToken('--i-4'); // --warn
-  const av = readToken('--i-2'); // --accent
+  const fg = readToken('--fg');
+  const mark = readToken('--i-4');
   const brake = readToken('--i-6');
-  const mute = readToken('--fg-mute');
+  const speedRGB = ramp(
+    [readToken('--i-6'), readToken('--i-5'), readToken('--i-4'), readToken('--i-3'), readToken('--i-2')],
+    SPEED_N,
+  );
+  const trace: string[] = [];
+  for (let i = 0; i < PLATOON.count; i++) {
+    // i = 0 이 후미. 선두(마지막)로 갈수록 흐려진다.
+    trace.push(rgba(fg, 0.9 - 0.62 * (i / Math.max(1, PLATOON.count - 1))));
+  }
   return {
     bg: rgba(bg, 1),
+    road: rgba(raise, 1),
     line: rgba(line, 1),
     hot: rgba(hot, 1),
-    human: rgba(human, 0.92),
-    humanDim: rgba(human, 0.3),
-    av: rgba(av, 0.95),
-    avDim: rgba(av, 0.32),
+    fg: rgba(fg, 0.9),
+    fgRGB: fg,
+    fgSoft: rgba(fg, 0.42),
+    fgFaint: rgba(fg, 0.2),
     brake: rgba(brake, 0.95),
-    mute: rgba(mute, 0.55),
-    linkOn: rgba(av, 0.75),
-    linkOff: rgba(av, 0.18),
-    node: rgba(human, 0.8),
-    nodeDone: rgba(mute, 0.4),
+    brakeDim: rgba(brake, 0.35),
+    mark: rgba(mark, 0.9),
+    markDim: rgba(mark, 0.3),
+    speed: speedRGB.map((c) => rgba(c, 0.95)),
+    speedRGB,
+    trace,
   };
 }
+
+/**
+ * 팔레트는 문서 전체에 하나뿐이다(토큰은 `:root` 에 있다).
+ * 물리 스텝 쪽에서도 색이 필요해서 — 링의 시공간도는 스텝마다 픽셀을 찍는다 —
+ * 훅 인스턴스가 아니라 모듈에 캐시한다.
+ */
+let PALETTE: Palette | null = null;
+const palette = (): Palette => (PALETTE ??= buildPalette());
+
+/**
+ * 속도 → 램프 버킷. 기준 속도는 장면마다 다르다(자유주행이 램프의 맨 위에 오도록).
+ * 실제 주행속도보다 조금 위에 잡아야 감속이 색으로 읽힌다.
+ */
+const V_REF: Record<SimScenario, number> = {
+  platoon: PLATOON.v0 * 1.15,
+  shockwave: RING.v0 * 1.35,
+  dispatch: DISPATCH.v0 * 1.15,
+  v2v: V2V.v0 * 1.25,
+};
+
+const sIdx = (v: number, vRef: number): number =>
+  Math.max(0, Math.min(SPEED_N - 1, Math.round((v / vRef) * (SPEED_N - 1))));
 
 /* ------------------------------------------------------------------ *
  * 씬
@@ -177,12 +239,34 @@ function buildPalette(): Palette {
 const PHYS_DT = 1 / 60;
 /** 한 프레임에 밀어넣을 수 있는 최대 물리 스텝 — 탭 복귀 시 폭주 방지. */
 const MAX_SUB = 12;
+/** 차 한 대의 실제 치수(m) — 그림의 직사각형은 전부 이 비율이다. */
 const CAR_LEN = 4.6;
-/** 링 시계열 트레이스 — 0.25s 간격 샘플 160개 = 40초 이력. */
+const CAR_W = 1.8;
+/** 차로 폭(m). 노면 띠의 두께가 여기서 나온다 — 도로에는 폭이 있다. */
+const LANE_W = 3.5;
+
+/** 링 속도편차 이력 — 0.25s 간격 샘플 160개 = 40초. **확정 판정에만 쓴다**(그리지 않는다). */
 const HIST_N = 160;
 const HIST_STEP = 0.25;
-/** 트레이스 풀스케일(m/s). 검증된 0-AV 변동(3.09)이 화면 상단 근처에 오도록. */
-const HIST_FS = 4;
+
+/* --- 링 시공간도(space–time diagram) -------------------------------- *
+ * Sugiyama(2008) · Stern et al.(2018) 링 실험 논문의 그림 그대로다:
+ * 가로 = 시간, 세로 = 링 위의 위치, 점의 색 = 그 순간 그 차의 속도.
+ * 정체 파동은 **뒤로 밀려가는 붉은 띠**로 나타난다.
+ *
+ * 매 프레임 60초 × 22대를 다시 찍지 않는다 — 열 하나(0.25s)씩 오프스크린
+ * 이미지에 덧쓰고(`sampleSpace`), 그리기는 `drawImage` 두 번이다.
+ * ------------------------------------------------------------------ */
+const ST_COLS = 240;
+const ST_ROWS = 100;
+/** 시공간도가 담는 시간(s) = 240열 × 0.25s. */
+const ST_SPAN = ST_COLS * HIST_STEP;
+
+/** 플래툰 v(t) 프로파일 — 한 주기(45s)를 0.25s 간격으로. */
+const PROF_STEP = 0.25;
+const PROF_N = Math.round(PLATOON.cycle / PROF_STEP) + 1;
+/** v(t) 세로축 풀스케일(m/s) = 60 km/h. 눈금은 20 km/h 마다. */
+const PROF_FS = 60 / 3.6;
 
 /* --- 확정 판정 상수 -------------------------------------------------- *
  * 물리를 바꾸는 값이 아니라 **언제 숫자를 확정값으로 읽어도 되는가**를 정하는 값이다.
@@ -247,17 +331,30 @@ interface Scene {
     /** 카메라: 좌측 기준 위치(m)와 가시 구간(m) */
     camX: number;
     span: number;
+    /** v(t) 프로파일 — 차량별 속도 이력(차량 i 의 k번째 샘플 = prof[i*PROF_N+k]). */
+    prof: Float32Array;
+    profN: number;
+    profAcc: number;
   };
   ring?: {
     avCount: number;
     U: number;
-    /** 속도 변동 이력 — 화면 오른쪽의 시계열 트레이스. */
+    /** 속도 변동 이력 — **확정 판정 전용**. 화면에는 나가지 않는다. */
     hist: Float32Array;
     head: number;
     filled: number;
     sampleAcc: number;
     /** 감쇠율이 확정된 시각(s). 아직이면 NaN. */
     settledAt: number;
+    /** 시공간도 — 픽셀을 직접 쓰는 이미지와 그것을 올려 둔 오프스크린 캔버스. */
+    img: ImageData | null;
+    cv: HTMLCanvasElement | null;
+    cvx: CanvasRenderingContext2D | null;
+    /** 다음에 덮어쓸 열 = 가장 오래된 열(링 버퍼의 머리). */
+    col: number;
+    dirty: boolean;
+    /** 직전 열에서 그 차가 있던 행(차량 id 로 색인). 궤적을 이어 그리는 데 쓴다. */
+    prow: Int16Array;
   };
   dispatch?: {
     net: Net;
@@ -285,6 +382,9 @@ function buildPlatoon(mode: PlatoonMode, lastAmp = Number.NaN): Scene {
     () => ({ kind, params: p }),
     v0,
   );
+  // 프로파일의 0번 샘플은 t=0 의 속도다 — 곡선이 축의 왼쪽 끝에서 시작한다.
+  const prof = new Float32Array(PLATOON.count * PROF_N);
+  for (let i = 0; i < vehicles.length; i++) prof[i * PROF_N] = vehicles[i]!.v;
   return {
     scenario: 'platoon',
     vehicles,
@@ -304,6 +404,9 @@ function buildPlatoon(mode: PlatoonMode, lastAmp = Number.NaN): Scene {
       lastAmp,
       camX: Number.NaN,
       span: Number.NaN,
+      prof,
+      profN: 1,
+      profAcc: 0,
     },
   };
 }
@@ -340,6 +443,15 @@ function stepPlatoon(sc: Scene, dt: number): Scene {
     }
   }
   if (!quiet) st.lastBrakeT = sc.t;
+
+  /* v(t) 프로파일 — 0.25s 마다 전 차량의 속도를 그대로 적는다. 파생 지표가 아니라
+     원자료다. 사이클이 끝나면 씬과 함께 새로 시작한다(그림도 다시 그려진다). */
+  st.profAcc += dt;
+  if (st.profAcc >= PROF_STEP && st.profN < PROF_N) {
+    st.profAcc -= PROF_STEP;
+    for (let i = 0; i <= last; i++) st.prof[i * PROF_N + st.profN] = sc.vehicles[i]!.v;
+    st.profN++;
+  }
 
   /*
    * **확정 조건** — 증폭률은 사이클 전체의 최저 속도로 정의되는 값이라,
@@ -388,6 +500,47 @@ function applyAV(sc: Scene, k: number): void {
   sc.ring!.U = U;
 }
 
+/**
+ * 시공간도에 **열 하나**를 적는다. 한 열 = 0.25초, 한 행 = 링의 4m 구간.
+ *
+ * 링 버퍼라 가장 오래된 열을 덮어쓴다 — 지우고, 그 순간 22대가 있는 자리에
+ * 제 속도색을 찍는다. 제어 AV 는 속도색 대신 `--fg` 라 궤적이 흰 선으로 남는다
+ * (Stern et al. 의 그림에서 실험차를 따로 표시하는 것과 같은 자리다).
+ */
+function sampleSpace(sc: Scene): void {
+  const r = sc.ring;
+  if (!r?.img) return;
+  const d = r.img.data;
+  const col = r.col;
+  const pal = palette();
+  const C = sc.circumference ?? RING.length;
+
+  for (let row = 0; row < ST_ROWS; row++) d[(row * ST_COLS + col) * 4 + 3] = 0;
+  for (const v of sc.vehicles) {
+    const k = ((v.x % C) + C) % C;
+    const row = Math.min(ST_ROWS - 1, Math.max(0, ST_ROWS - 1 - Math.floor((k / C) * ST_ROWS)));
+    const c = v.fs ? pal.fgRGB : pal.speedRGB[sIdx(v.v, V_REF.shockwave)]!;
+    /* 직전 열의 행까지 이어 칠한다 — 한 열 사이에 차가 여러 행을 지나가면
+       점만 찍었을 때 궤적이 **파선**으로 끊긴다. 링을 한 바퀴 돌아 0 을 넘어간
+       경우(행이 껑충 뛴다)는 잇지 않는다. 그 선은 실제로 화면 밖으로 나갔다. */
+    const prev = r.prow[v.id] ?? -1;
+    const gap = prev < 0 ? 0 : Math.abs(prev - row);
+    const from = gap > 0 && gap < ST_ROWS / 4 ? prev : row;
+    const lo = Math.min(from, row);
+    const hi = Math.max(from, row);
+    for (let y = lo; y <= hi; y++) {
+      const o = (y * ST_COLS + col) * 4;
+      d[o] = c[0];
+      d[o + 1] = c[1];
+      d[o + 2] = c[2];
+      d[o + 3] = 255;
+    }
+    r.prow[v.id] = row;
+  }
+  r.col = (col + 1) % ST_COLS;
+  r.dirty = true;
+}
+
 function buildRing(avCount: number): Scene {
   const rng = makeRng(RING.seed);
   const vehicles = seedRing(
@@ -414,13 +567,29 @@ function buildRing(avCount: number): Scene {
       filled: 0,
       sampleAcc: 0,
       settledAt: Number.NaN,
+      img: typeof ImageData === 'undefined' ? null : new ImageData(ST_COLS, ST_ROWS),
+      cv: null,
+      cvx: null,
+      col: 0,
+      dirty: true,
+      prow: new Int16Array(RING.count).fill(-1),
     },
   };
 
-  // 파동이 자리잡을 때까지(warmup) 미리 돌려 둔다 — 방문자가 60초를 기다리지
-  // 않고 바로 stop-and-go 를 본다. AV 투입은 그 다음이다(scenarios.ts 규정).
+  /* 파동이 자리잡을 때까지(warmup) 미리 돌려 둔다 — 방문자가 60초를 기다리지
+     않고 바로 stop-and-go 를 본다. AV 투입은 그 다음이다(scenarios.ts 규정).
+
+     **시공간도도 이때 같이 채운다.** 안 그러면 화면에 들어선 뒤 40초 동안 빈 격자를
+     보게 되고, 그 사이에는 이 그림이 무슨 말을 하려는지 알 수가 없다. 채워지는 것은
+     warmup 마지막 60초의 실측이다 — 과도구간을 건너뛴 것이지 지어낸 게 아니다. */
+  let warmAcc = 0;
   for (let t = 0; t < RING.warmup; t += PHYS_DT) {
     step(vehicles, PHYS_DT, { circumference: RING.length, rng });
+    warmAcc += PHYS_DT;
+    if (warmAcc >= HIST_STEP) {
+      warmAcc -= HIST_STEP;
+      sampleSpace(sc);
+    }
   }
   sc.spreadEma = speedSpread(vehicles);
   // 느린 EMA 는 검증된 0-AV 기준값(scenarios.ts)에서 출발시킨다 — 계측기의 영점이다.
@@ -992,6 +1161,7 @@ function advance(sc: Scene, dt: number): Scene {
     r.sampleAcc += dt;
     if (r.sampleAcc >= HIST_STEP) {
       r.sampleAcc = 0;
+      sampleSpace(sc);
       r.hist[r.head] = speedSpread(sc.vehicles);
       r.head = (r.head + 1) % HIST_N;
       if (r.filled < HIST_N) r.filled++;
@@ -1030,52 +1200,76 @@ const isSettled = (sc: Scene): boolean =>
       : true;
 
 /* ------------------------------------------------------------------ *
- * 그리기 원시요소 — 전부 fillRect. arc() 없음.
+ * 그리기 원시요소 — 전부 fillRect(+rotate). arc() 없음, stroke 없음.
+ *
+ * **이 그림들은 논문의 그림이다.** 왼쪽(또는 위)은 축척이 있는 평면도이고,
+ * 오른쪽(또는 아래)은 그 분야의 표준 도표다 — 시공간도, v(t) 프로파일.
+ * 도표는 파생 지표가 아니라 **원자료**(위치·속도·시간)를 그대로 찍는다.
+ *
+ * 규칙 셋:
+ *   · 점선은 이 사이트의 구분선 어휘다. 여기서는 장식으로 쓰지 않는다 — 선은 실선.
+ *   · 축은 1px 실선 + 눈금 틱. 글자는 없다(캔버스는 aria-hidden, 값은 HTML 이 맡는다).
+ *   · 차량은 실제 비율(4.6 m × 1.8 m)의 직사각형이고, 색은 **속도**다. 네 장면 공통.
  * ------------------------------------------------------------------ */
 
-function dots(
+const PAD = 14;
+
+/** 실선 한 줄 — 축에 나란하면 fillRect, 비스듬하면 회전한 fillRect 하나. */
+function line(
   ctx: CanvasRenderingContext2D,
   x0: number,
   y0: number,
   x1: number,
   y1: number,
-  gap: number,
-  size: number,
+  t = 1,
 ): void {
   const dx = x1 - x0;
   const dy = y1 - y0;
-  const len = Math.hypot(dx, dy);
-  if (len < 1) return;
-  const n = Math.max(1, Math.round(len / gap));
-  const half = size / 2;
-  for (let i = 0; i <= n; i++) {
-    const k = i / n;
-    ctx.fillRect(Math.round(x0 + dx * k - half), Math.round(y0 + dy * k - half), size, size);
+  if (Math.abs(dy) < 0.6) {
+    ctx.fillRect(Math.min(x0, x1), Math.round((y0 + y1) / 2 - t / 2), Math.abs(dx), Math.max(1, t));
+    return;
   }
+  if (Math.abs(dx) < 0.6) {
+    ctx.fillRect(Math.round((x0 + x1) / 2 - t / 2), Math.min(y0, y1), Math.max(1, t), Math.abs(dy));
+    return;
+  }
+  ctx.save();
+  ctx.translate(x0, y0);
+  ctx.rotate(Math.atan2(dy, dx));
+  ctx.fillRect(0, -t / 2, Math.hypot(dx, dy), Math.max(1, t));
+  ctx.restore();
 }
 
-/** 점으로 그린 원 — arc() 금지(하드 룰 1). */
-function dotRing(
-  ctx: CanvasRenderingContext2D,
-  cx: number,
-  cy: number,
-  r: number,
-  gap: number,
-  size: number,
-): void {
-  const n = Math.max(12, Math.round((2 * Math.PI * r) / gap));
-  const half = size / 2;
-  for (let i = 0; i < n; i++) {
+/** 1px 사각 테두리 — 원은 하드 룰 1 로 금지다. */
+function frame(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number): void {
+  const s = Math.max(2, Math.round(r * 2));
+  const x = Math.round(cx - s / 2);
+  const y = Math.round(cy - s / 2);
+  ctx.fillRect(x, y, s, 1);
+  ctx.fillRect(x, y + s - 1, s, 1);
+  ctx.fillRect(x, y, 1, s);
+  ctx.fillRect(x + s - 1, y, 1, s);
+}
+
+/** 실선 원 — `arc()` 가 금지라 현(弦)으로 잇는다. 64각형이면 R=120px 에서 처짐 0.15px. */
+function circle(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number): void {
+  const n = 64;
+  let px = cx + r;
+  let py = cy;
+  for (let i = 1; i <= n; i++) {
     const a = (i / n) * Math.PI * 2;
-    ctx.fillRect(
-      Math.round(cx + Math.cos(a) * r - half),
-      Math.round(cy + Math.sin(a) * r - half),
-      size,
-      size,
-    );
+    const qx = cx + Math.cos(a) * r;
+    const qy = cy + Math.sin(a) * r;
+    line(ctx, px, py, qx, qy);
+    px = qx;
+    py = qy;
   }
 }
 
+/**
+ * 차 한 대. `mark` 가 있으면 1px 테두리로 지목한다 — 제어 AV·배차된 차처럼
+ * **그 장면이 가리키는 차**를 색이 아니라 테두리로 구분한다(색은 속도의 몫이다).
+ */
 function car(
   ctx: CanvasRenderingContext2D,
   px: number,
@@ -1085,37 +1279,56 @@ function car(
   wid: number,
   color: string,
   brake: string | null,
+  mark: string | null,
 ): void {
+  const lamp = Math.min(2, len / 3);
   if (angle === 0) {
+    const x = Math.round(px - len / 2);
+    const y = Math.round(py - wid / 2);
+    if (mark) {
+      ctx.fillStyle = mark;
+      ctx.fillRect(x - 1, y - 1, Math.round(len) + 2, Math.round(wid) + 2);
+    }
     ctx.fillStyle = color;
-    ctx.fillRect(Math.round(px - len / 2), Math.round(py - wid / 2), len, wid);
+    ctx.fillRect(x, y, Math.round(len), Math.round(wid));
     if (brake) {
+      // 제동등은 **뒤쪽 끝**이다 — 이 장면들에서 차는 +x 로 간다.
       ctx.fillStyle = brake;
-      ctx.fillRect(Math.round(px - len / 2) - 2, Math.round(py - wid / 2), 2, wid);
+      ctx.fillRect(x, y, lamp, Math.round(wid));
     }
     return;
   }
   ctx.save();
   ctx.translate(px, py);
   ctx.rotate(angle);
+  if (mark) {
+    ctx.fillStyle = mark;
+    ctx.fillRect(-len / 2 - 1, -wid / 2 - 1, len + 2, wid + 2);
+  }
   ctx.fillStyle = color;
   ctx.fillRect(-len / 2, -wid / 2, len, wid);
   if (brake) {
     ctx.fillStyle = brake;
-    ctx.fillRect(-len / 2 - 2, -wid / 2, 2, wid);
+    ctx.fillRect(-len / 2, -wid / 2, lamp, wid);
   }
   ctx.restore();
 }
+
+/** 제동 중이면 제동등 색, 아니면 null. */
+const brakeOf = (v: Vehicle, pal: Palette): string | null => (v.a < -0.9 ? pal.brake : null);
 
 /* ------------------------------------------------------------------ *
  * 시나리오별 렌더러
  * ------------------------------------------------------------------ */
 
-const PAD = 14;
-
-/** 제동 중이면 제동등 색, 아니면 null. */
-const brakeOf = (v: Vehicle, pal: Palette): string | null => (v.a < -0.9 ? pal.brake : null);
-
+/**
+ * 01 · 직선 플래툰 — 위는 평면도, 아래는 **속도 프로파일 v(t)**.
+ *
+ * string stability 논문의 표준 그림이다: 한 주기 동안 12대의 속도 곡선을 겹쳐
+ * 그리면 사람·상용 ACC 는 뒤로 갈수록 골이 깊어지고(증폭), 제어 AV 는 얕아진다.
+ * 이전 판의 세로 막대 12개는 같은 값을 그렸지만 **이퀄라이저**로 읽혔다 —
+ * 시간축이 없으면 그것은 도표가 아니라 장식이다.
+ */
 function drawPlatoon(ctx: CanvasRenderingContext2D, W: number, H: number, sc: Scene, pal: Palette) {
   const st = sc.platoon!;
   const vs = sc.vehicles;
@@ -1134,172 +1347,190 @@ function drawPlatoon(ctx: CanvasRenderingContext2D, W: number, H: number, sc: Sc
   const scale = (W - PAD * 2) / st.span;
   const toX = (x: number) => PAD + (x - st.camX) * scale;
 
-  const yRoad = Math.round(H * 0.27);
-  const half = Math.max(5, Math.min(11, H * 0.04));
+  const plot = H >= 150;
+  const yRoad = Math.round(plot ? H * 0.22 : H * 0.5);
+  const laneHalf = Math.max(3, Math.min(16, (LANE_W / 2) * scale));
 
-  // 도로 — 점선 헤어라인 2줄
-  ctx.fillStyle = pal.line;
-  dots(ctx, PAD, yRoad - half, W - PAD, yRoad - half, 5, 1);
-  dots(ctx, PAD, yRoad + half, W - PAD, yRoad + half, 5, 1);
-
-  // 거리 눈금 — 월드 좌표에 박혀 있어 도로가 흘러간다(주행 단서이자 축척).
+  /* --- 평면도 ------------------------------------------------------
+     노면은 폭이 있는 띠다. 가장자리 1px 실선 두 줄이 차로를 만든다. */
+  ctx.fillStyle = pal.road;
+  ctx.fillRect(PAD, Math.round(yRoad - laneHalf), W - PAD * 2, Math.round(laneHalf * 2));
   ctx.fillStyle = pal.hot;
-  const tickStep = 50;
-  for (let x = Math.floor(st.camX / tickStep) * tickStep; x < st.camX + st.span; x += tickStep) {
-    const px = toX(x);
+  line(ctx, PAD, yRoad - laneHalf, W - PAD, yRoad - laneHalf);
+  line(ctx, PAD, yRoad + laneHalf, W - PAD, yRoad + laneHalf);
+
+  /* 거리 눈금자 — 월드 좌표에 박혀 있어 도로가 흘러간다. 25 m 짧은 틱 · 100 m 긴 틱.
+     축척이자 주행 단서다(축척 막대 하나보다 이쪽이 계측기의 자에 가깝다). */
+  const yTick = Math.round(yRoad + laneHalf) + 2;
+  for (let x = Math.ceil(st.camX / 25) * 25; x < st.camX + st.span; x += 25) {
+    const px = Math.round(toX(x));
     if (px < PAD || px > W - PAD) continue;
-    ctx.fillRect(Math.round(px), Math.round(yRoad - half - 5), 1, 4);
+    const major = Math.abs(x % 100) < 1e-6;
+    ctx.fillStyle = major ? pal.hot : pal.line;
+    ctx.fillRect(px, yTick, 1, major ? 6 : 3);
   }
 
-  // 속도 프로파일 — 차량 위치 바로 아래에 막대. 파동이 어디 있는지 공간적으로 읽힌다.
-  const yBase = Math.round(H * 0.94);
-  const barMax = yBase - Math.round(H * 0.42);
-  ctx.fillStyle = pal.mute;
-  dots(ctx, PAD, yBase, W - PAD, yBase, 5, 1);
-
-  const vRef = Math.max(st.v0, ...vs.map((v) => v.v));
   const carLen = Math.max(5, CAR_LEN * scale);
-  const carWid = Math.max(3, Math.min(7, half * 0.9));
-
-  for (let i = 0; i < vs.length; i++) {
-    const v = vs[i]!;
+  const carWid = Math.max(2, Math.min(laneHalf * 1.7, CAR_W * scale));
+  const vRef = V_REF.platoon;
+  for (const v of vs) {
     const px = toX(v.x);
     if (px < -20 || px > W + 20) continue;
-    const isLead = i === vs.length - 1;
-    const col = v.kind === 'human' ? pal.human : pal.av;
+    car(ctx, px, yRoad, 0, carLen, carWid, pal.speed[sIdx(v.v, vRef)]!, brakeOf(v, pal), null);
+  }
 
-    car(ctx, px, yRoad, 0, carLen, carWid, col, brakeOf(v, pal));
+  if (!plot) return;
 
-    // 교란원(선두)이 제동 중이면 위에 틱을 하나 세운다.
-    if (isLead && st.braking) {
-      ctx.fillStyle = pal.brake;
-      ctx.fillRect(Math.round(px), yRoad - half - 8, 1, 6);
+  /* --- v(t) 프로파일 ------------------------------------------------ */
+  const pTop = Math.round(yRoad + laneHalf + 24);
+  const pBot = H - PAD - 5;
+  const ax = PAD + 8;
+  const x1 = W - PAD;
+  if (pBot - pTop < 30) return;
+  const tOf = (s: number) => ax + (s / PLATOON.cycle) * (x1 - ax);
+  const vOf = (v: number) => pBot - Math.min(1, Math.max(0, v / PROF_FS)) * (pBot - pTop);
+
+  ctx.fillStyle = pal.line;
+  line(ctx, ax, pTop, ax, pBot);
+  line(ctx, ax, pBot, x1, pBot);
+  ctx.fillStyle = pal.hot;
+  for (let k = 0; k <= 60; k += 20) ctx.fillRect(ax - 4, Math.round(vOf(k / 3.6)), 4, 1);
+  for (let s = 0; s <= PLATOON.cycle; s += 10) ctx.fillRect(Math.round(tOf(s)), pBot + 1, 1, 4);
+
+  // 교란이 시작되는 순간 — 선두가 밟는다. 곡선의 골은 전부 이 선 오른쪽에서 생긴다.
+  ctx.fillStyle = pal.brakeDim;
+  line(ctx, tOf(PLATOON.perturb.at), pTop, tOf(PLATOON.perturb.at), pBot);
+
+  /* 궤적 — 선두(마지막 인덱스)가 가장 흐리고 후미(0)가 가장 밝다. 증폭은
+     "뒤로 갈수록 골이 깊어지는 것"이므로 읽어야 할 쪽을 세운다. */
+  const n = st.profN;
+  const prof = st.prof;
+  for (let i = vs.length - 1; i >= 0; i--) {
+    ctx.fillStyle = pal.trace[Math.min(pal.trace.length - 1, i)]!;
+    let px = tOf(0);
+    let py = vOf(prof[i * PROF_N]!);
+    for (let k = 1; k < n; k++) {
+      const qx = tOf(k * PROF_STEP);
+      const qy = vOf(prof[i * PROF_N + k]!);
+      line(ctx, px, py, qx, qy);
+      px = qx;
+      py = qy;
     }
-
-    const h = Math.round((v.v / vRef) * barMax);
-    ctx.fillStyle = v.kind === 'human' ? pal.humanDim : pal.avDim;
-    ctx.fillRect(Math.round(px) - 1, yBase - h, 3, h);
-    ctx.fillStyle = col;
-    ctx.fillRect(Math.round(px) - 1, yBase - h, 3, 2);
   }
 }
 
+/** 시공간도의 오프스크린 캔버스는 처음 그릴 때 만든다(SSR·테스트에는 document 가 없다). */
+function spaceCanvas(r: NonNullable<Scene['ring']>): HTMLCanvasElement | null {
+  if (r.cv || !r.img || typeof document === 'undefined') return r.cv;
+  const c = document.createElement('canvas');
+  c.width = ST_COLS;
+  c.height = ST_ROWS;
+  r.cv = c;
+  r.cvx = c.getContext('2d');
+  r.dirty = true;
+  return c;
+}
+
+/**
+ * 02 · 링 — 왼쪽은 조감 평면도, 오른쪽은 **시공간도**.
+ *
+ * 시공간도는 가로 60초 × 세로 링 400 m 이고, 점의 색은 그 순간 그 차의 속도다.
+ * 정체 파동은 **뒤(위-왼쪽)로 밀려가는 붉은 띠**로 나타나고, AV 를 넣으면 띠가
+ * 사라진다 — Sugiyama(2008)·Stern et al.(2018) 링 실험 논문의 바로 그 그림이다.
+ * 앞 판의 "속도 편차 시계열"은 원자료가 아니라 파생 지표라 장면과 이어지지 않았다.
+ */
 function drawRing(ctx: CanvasRenderingContext2D, W: number, H: number, sc: Scene, pal: Palette) {
-  const st = sc.ring!;
+  const r = sc.ring!;
   const vs = sc.vehicles;
   const C = sc.circumference!;
-
-  // 넓은 화면에서는 링 옆에 속도 편차의 시계열 띠를 붙인다 — AV 를 넣으면 이 선이
-  // 기준선 아래로 내려앉는다. 링만 두면 넓은 캔버스(가로세로비 3.8)의 오른쪽 절반이
-  // 통째로 빈다.
   const wide = W >= 520;
-  const ringW = wide ? Math.round(W * 0.42) : W;
+  const ringW = wide ? Math.round(W * 0.34) : W;
+
   const cx = ringW / 2;
   const cy = H / 2;
-  const R = Math.max(26, Math.min(ringW * 0.46, H * 0.44) - 16);
-  const half = Math.max(4, R * 0.05);
+  const R = Math.max(24, Math.min(ringW * 0.46, H * 0.44) - 12);
+  const s = (2 * Math.PI * R) / C; // px per m — 링의 축척
+  const laneHalf = Math.max(2.5, (LANE_W / 2) * s);
 
-  ctx.fillStyle = pal.line;
-  dotRing(ctx, cx, cy, R - half, 6, 1);
-  dotRing(ctx, cx, cy, R + half, 6, 1);
+  /* --- 링 도로 ------------------------------------------------------
+     도로 양 가장자리 실선 두 겹. 폭은 차로 하나(3.5 m)를 축척대로. */
+  ctx.fillStyle = pal.hot;
+  circle(ctx, cx, cy, R - laneHalf);
+  circle(ctx, cx, cy, R + laneHalf);
 
-  const vRef = Math.max(RING.v0 * 1.2, ...vs.map((v) => v.v));
-  const tickMax = Math.max(10, R * 0.2);
-  const carLen = Math.max(5, (CAR_LEN / C) * 2 * Math.PI * R);
-  const carWid = Math.max(3, Math.min(7, half * 1.1));
-
+  const carLen = Math.max(5, CAR_LEN * s);
+  const carWid = Math.max(2, Math.min(laneHalf * 1.7, CAR_W * s));
+  const vRef = V_REF.shockwave;
   for (const v of vs) {
     const a = (v.x / C) * Math.PI * 2 - Math.PI / 2;
-    const ca = Math.cos(a);
-    const sa = Math.sin(a);
-    const col = v.kind === 'human' ? pal.human : pal.av;
-
-    // 속도 눈금 — 링 바깥으로 뻗는 막대. 정체 구간이 바로 보인다.
-    const len = Math.max(1, (v.v / vRef) * tickMax);
-    ctx.save();
-    ctx.translate(cx + ca * (R + half + 2), cy + sa * (R + half + 2));
-    ctx.rotate(a);
-    ctx.fillStyle = v.kind === 'human' ? pal.humanDim : pal.avDim;
-    ctx.fillRect(0, -1, len, 2);
-    ctx.restore();
-
-    car(ctx, cx + ca * R, cy + sa * R, a + Math.PI / 2, carWid, carLen, col, brakeOf(v, pal));
+    car(
+      ctx,
+      cx + Math.cos(a) * R,
+      cy + Math.sin(a) * R,
+      a + Math.PI / 2,
+      carLen,
+      carWid,
+      pal.speed[sIdx(v.v, vRef)]!,
+      brakeOf(v, pal),
+      v.fs ? pal.fg : null,
+    );
   }
 
   if (!wide) return;
 
-  /* --- 속도 편차 띠 (최근 40초) -------------------------------------------
-   *
-   * 링 옆에 점만 흩뿌린 **스파크라인**이었다. 축도 눈금도 기준선의 뜻도 없어서
-   * 내용이 아니라 장식으로 읽혔다("빈 자리에 떠 있는 선"). 지금은 축이 있는 띠다:
-   *   · 세로축 0 … 4 m/s — 왼쪽 변에 0·2·4 눈금 틱
-   *   · 가로축 최근 40초 — 아래 변에 10초마다 눈금 틱
-   *   · 앰버 기준선 = 검증된 0-AV 속도편차(scenarios.ts). AV 를 넣으면 시안 궤적이
-   *     이 선 아래로 내려온다 — 이 장면이 하려는 말 전부가 그 한 칸에 있다.
-   *
-   * 글자는 쓰지 않는다. 캔버스는 aria-hidden 이고, 읽는 값은 아래 계측 한 줄이 맡는다.
-   */
-  const x0 = ringW + PAD * 2;
+  /* --- 시공간도 ----------------------------------------------------- */
+  const x0 = ringW + 24;
   const x1 = W - PAD;
-  const yBot = H - PAD - 4;
-  const yTop = PAD + 4;
-  const yOf = (v: number) => yBot - Math.min(1, v / HIST_FS) * (yBot - yTop);
+  const y0 = PAD;
+  const y1 = H - PAD - 5;
+  if (x1 - x0 < 60 || y1 - y0 < 40) return;
 
-  // 세로축 — 점선 헤어라인 + 0·2·4 m/s 눈금 틱
+  // 축 — 세로는 링 위의 위치(100 m 마다), 가로는 시간(10초 마다).
   ctx.fillStyle = pal.line;
-  dots(ctx, x0, yTop, x0, yBot, 5, 1);
+  line(ctx, x0 - 5, y0, x0 - 5, y1);
+  line(ctx, x0 - 5, y1, x1, y1);
   ctx.fillStyle = pal.hot;
-  for (let v = 0; v <= HIST_FS; v += HIST_FS / 2) {
-    const y = Math.round(yOf(v));
-    ctx.fillRect(x0 - 4, y, 4, 1);
+  for (let m = 0; m <= C; m += 100) {
+    ctx.fillRect(x0 - 9, Math.round(y1 - (m / C) * (y1 - y0)), 4, 1);
+  }
+  for (let t = 0; t <= ST_SPAN; t += 10) {
+    ctx.fillRect(Math.round(x0 + (t / ST_SPAN) * (x1 - x0)), y1 + 1, 1, 4);
   }
 
-  // 가로축 — 10초 눈금. 시간이 실제로 흐른다는 것을 눈금이 말한다.
-  ctx.fillStyle = pal.line;
-  dots(ctx, x0, yBot, x1, yBot, 5, 1);
-  ctx.fillStyle = pal.hot;
-  const secs = HIST_N * HIST_STEP;
-  for (let t = 0; t <= secs; t += 10) {
-    const x = Math.round(x0 + (t / secs) * (x1 - x0));
-    ctx.fillRect(x, yBot + 1, 1, 4);
+  const cv = spaceCanvas(r);
+  if (!cv || !r.cvx || !r.img) return;
+  if (r.dirty) {
+    r.cvx.putImageData(r.img, 0, 0);
+    r.dirty = false;
   }
-
-  // 검증된 0-AV 기준선 (scenarios.ts). 앰버 = 사람이 모는 교통 — 링의 차와 같은 색이다.
-  ctx.fillStyle = pal.humanDim;
-  dots(ctx, x0, yOf(RING.spreadByAV[0] ?? 3.09), x1, yOf(RING.spreadByAV[0] ?? 3.09), 6, 1);
-
-  // 트레이스는 점으로만 찍는다 — 막대로 채우면 화면이 무거워지고 추세가 안 읽힌다.
-  const wpx = (x1 - x0) / HIST_N;
-  ctx.fillStyle = pal.av;
-  for (let i = 0; i < st.filled; i++) {
-    const idx = (st.head - st.filled + i + HIST_N * 2) % HIST_N;
-    ctx.fillRect(Math.round(x0 + i * wpx), Math.round(yOf(st.hist[idx]!)), 2, 2);
-  }
+  /* 링 버퍼를 **두 조각**으로 옮긴다: 가장 오래된 열(col)부터 끝까지가 왼쪽,
+     0..col 이 오른쪽. 매 프레임 60초 × 22대를 다시 찍지 않는다(drawImage 2회). */
+  const smooth = ctx.imageSmoothingEnabled;
+  ctx.imageSmoothingEnabled = false;
+  const head = r.col;
+  const w1 = Math.round(((ST_COLS - head) / ST_COLS) * (x1 - x0));
+  ctx.drawImage(cv, head, 0, ST_COLS - head, ST_ROWS, x0, y0, w1, y1 - y0);
+  if (head > 0) ctx.drawImage(cv, 0, 0, head, ST_ROWS, x0 + w1, y0, x1 - x0 - w1, y1 - y0);
+  ctx.imageSmoothingEnabled = smooth;
 }
 
-/** 네 모서리 틱 — HudFrame 과 같은 언어. 원은 하드 룰 1 로 금지다. */
-function corners(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, t: number): void {
-  for (const [ox, oy] of [
-    [-r, -r],
-    [r - t, -r],
-    [-r, r - t],
-    [r - t, r - t],
-  ] as const) {
-    ctx.fillRect(Math.round(x + ox), Math.round(y + oy), t, t);
-  }
-}
-
+/**
+ * 03 · 배차 — **도시의 지도**다. 회로 기판이 아니다.
+ *
+ * 간선은 폭이 있는 노면이고, 테두리(casing)를 전부 먼저 긋고 노면을 그 위에 덮는다.
+ * 그러면 교차로가 저절로 뚫린다 — 지도 제도에서 쓰는 방법 그대로다.
+ * 수요는 1px 사각 테두리이고 **기다린 만큼 커진다**(크기가 곧 대기시간이다).
+ */
 function drawDispatch(ctx: CanvasRenderingContext2D, W: number, H: number, sc: Scene, pal: Palette) {
   const st = sc.dispatch!;
   const net = st.net;
 
   /* 축척은 가로·세로를 **따로** 잡는다.
-     계측기 캔버스의 가로세로비는 페이지마다 다르다(연구 페이지 3.8, 홈 패널 2.6).
+     계측기 캔버스의 가로세로비는 페이지마다 다르다(연구 페이지 3.7, 홈 패널 2.1).
      한 축척으로 맞추면 한쪽에서는 화면의 절반이 빈 채로 남는다. 도시의 블록은
      원래 정사각형이 아니므로 늘어난 격자도 도시로 읽힌다 — 다만 비가 지나치면
-     도로가 아니라 줄무늬가 되므로 1.75배까지만 허용한다. 마커가 도면 밖으로
-     나가므로 여백은 화면 픽셀로 뺀다(미터로 빼면 축척에 따라 여백이 달라진다). */
-  const MARK = 24;
+     도로가 아니라 줄무늬가 되므로 1.75배까지만 허용한다. */
+  const MARK = 22;
   let sx = Math.max(0.2, (W - PAD * 2 - MARK * 2) / net.w);
   let sy = Math.max(0.2, (H - PAD * 2 - MARK * 2) / net.h);
   const RATIO = 1.75;
@@ -1308,77 +1539,68 @@ function drawDispatch(ctx: CanvasRenderingContext2D, W: number, H: number, sc: S
   const SX = (x: number) => W / 2 + x * sx;
   const SY = (y: number) => H / 2 + y * sy;
 
-  /** 차로 폭의 절반(px). 한 줄짜리 선은 "도로"로 읽히지 않는다. */
-  const halfW = Math.max(3, Math.min(9, 7.2 * Math.min(sx, sy)));
+  /** 왕복 2차로(7 m)의 절반. 한 줄짜리 선은 "도로"로 읽히지 않는다. */
+  const halfW = Math.max(2.5, Math.min(9, LANE_W * Math.min(sx, sy)));
 
-  /* --- 도로 -------------------------------------------------------- */
+  /* --- 도로: 테두리 먼저, 노면 나중 --------------------------------- */
+  ctx.fillStyle = pal.hot;
   for (const [a, b] of net.edges) {
     const A = net.nodes[a]!;
     const B = net.nodes[b]!;
-    const ax = SX(A.x);
-    const ay = SY(A.y);
-    const bx = SX(B.x);
-    const by = SY(B.y);
-    const L = Math.hypot(bx - ax, by - ay) || 1;
-    const nx = (-(by - ay) / L) * halfW;
-    const ny = ((bx - ax) / L) * halfW;
-    // 경계는 굵게(2px). 1px 점선으로는 도로망이 아니라 **연필 자국**으로 보였다.
-    ctx.fillStyle = pal.hot;
-    dots(ctx, ax + nx, ay + ny, bx + nx, by + ny, 5, 2);
-    dots(ctx, ax - nx, ay - ny, bx - nx, by - ny, 5, 2);
-    ctx.fillStyle = pal.line;
-    dots(ctx, ax, ay, bx, by, 11, 1);
+    line(ctx, SX(A.x), SY(A.y), SX(B.x), SY(B.y), halfW * 2 + 2);
+  }
+  ctx.fillStyle = pal.road;
+  for (const [a, b] of net.edges) {
+    const A = net.nodes[a]!;
+    const B = net.nodes[b]!;
+    line(ctx, SX(A.x), SY(A.y), SX(B.x), SY(B.y), halfW * 2);
   }
 
-  /* --- 교차로 ------------------------------------------------------ */
-  ctx.fillStyle = pal.hot;
-  for (const q of net.nodes) ctx.fillRect(Math.round(SX(q.x)) - 2, Math.round(SY(q.y)) - 2, 5, 5);
-
-  // 점멸은 계단 함수다 — 페이드가 아니라 계측기의 깜빡임.
-  const blink = sc.t * 2.2 - Math.floor(sc.t * 2.2) < 0.62;
-
-  /* --- 배차 링크 ----------------------------------------------------
-     차량에서 목표까지 **실제 경로를 따라** 점을 찍는다. 직선으로 화면을 가로지르면
-     차가 갈 길과 무관해져서, 배차가 아니라 레이저 포인터로 보인다. */
+  /* --- 배차 경로 ----------------------------------------------------
+     배정된 차량에서 목표까지 **실제 경로를 따라** 한 줄. 직선으로 화면을
+     가로지르면 차가 갈 길과 무관해져서 배차가 아니라 레이저 포인터가 된다. */
+  ctx.fillStyle = pal.fgFaint;
   for (const job of st.jobs) {
     if (job.phase === 0 || job.veh < 0) continue;
     const nv = st.nav[job.veh];
     if (!nv) continue;
     const p = navPoint(net, nv);
-    ctx.fillStyle = job.phase === 1 ? (blink ? pal.linkOn : pal.linkOff) : pal.linkOff;
     let px = SX(p.x);
     let py = SY(p.y);
     for (const k of [nv.b, ...nv.route]) {
       const q = net.nodes[k]!;
-      dots(ctx, px, py, SX(q.x), SY(q.y), 7, 2);
+      line(ctx, px, py, SX(q.x), SY(q.y));
       px = SX(q.x);
       py = SY(q.y);
     }
   }
 
-  /* --- 수요 --------------------------------------------------------
-     **기다린 만큼 커진다.** 크기가 대기시간이라, 차가 늦으면 화면에서 먼저 보인다. */
+  /* --- 수요 --------------------------------------------------------- */
   for (const job of st.jobs) {
     const o = net.nodes[job.origin]!;
-    const waited = Math.min(16, sc.t - job.born);
-    const r = 8 + waited * 0.75;
-    ctx.fillStyle = job.phase === 0 ? (blink ? pal.node : pal.humanDim) : pal.avDim;
-    corners(ctx, SX(o.x), SY(o.y), job.phase === 0 ? r : 7, 3);
+    const ox = SX(o.x);
+    const oy = SY(o.y);
     if (job.phase === 0) {
-      // 기다리는 사람 — 마커 한가운데. 배차되면 사라지고 차량이 그 자리를 잇는다.
-      ctx.fillRect(Math.round(SX(o.x)) - 1, Math.round(SY(o.y)) - 1, 3, 3);
+      const waited = Math.min(18, sc.t - job.born);
+      ctx.fillStyle = pal.mark;
+      ctx.fillRect(Math.round(ox) - 1, Math.round(oy) - 1, 3, 3);
+      frame(ctx, ox, oy, 5 + waited * 0.7);
+    } else if (job.phase === 1) {
+      ctx.fillStyle = pal.markDim;
+      frame(ctx, ox, oy, 5);
     }
     if (job.phase !== 2) continue;
-    // 승차한 뒤에는 목적지가 켜진다.
     const d = net.nodes[job.dest]!;
-    ctx.fillStyle = pal.av;
-    corners(ctx, SX(d.x), SY(d.y), 8, 3);
+    ctx.fillStyle = pal.fgSoft;
+    frame(ctx, SX(d.x), SY(d.y), 6);
   }
 
   /* --- 차량 --------------------------------------------------------
-     우측통행으로 반 차로 비킨다 — 마주 오는 차와 겹치지 않는다. */
-  const carLen = Math.max(7, CAR_LEN * Math.min(sx, sy) * 1.8);
-  const carWid = Math.max(3, halfW * 1.05);
+     우측통행으로 반 차로 비킨다 — 마주 오는 차와 겹치지 않는다.
+     운행 중인 차는 1px 테두리로 지목한다(색은 속도의 몫이다). */
+  const carLen = Math.max(6, CAR_LEN * Math.min(sx, sy) * 1.5);
+  const carWid = Math.max(2.5, (CAR_W / CAR_LEN) * carLen);
+  const vRef = V_REF.dispatch;
   for (const v of sc.vehicles) {
     const nv = st.nav[v.id];
     if (!nv) continue;
@@ -1394,64 +1616,69 @@ function drawDispatch(ctx: CanvasRenderingContext2D, W: number, H: number, sc: S
       ang,
       carLen,
       carWid,
-      nv.job >= 0 ? pal.av : pal.avDim,
+      pal.speed[sIdx(v.v, vRef)]!,
       brakeOf(v, pal),
+      nv.job >= 0 ? pal.fg : null,
     );
   }
 }
 
+/**
+ * 04 · V2V 협조 합류 — 본선 한 차로와 합류 램프의 평면도.
+ *
+ * 링크는 두 차 사이의 **1px 실선 하나**다(범위 안일 때만). 점멸하지 않는다 —
+ * 깜빡임은 계측이 아니라 연출이고, 링크의 정보는 "있다/없다"뿐이다.
+ * 협조의 실체는 본선 후행차가 벌려 주는 간격이라, 그 한 쌍에만 브래킷을 둔다.
+ */
 function drawV2V(ctx: CanvasRenderingContext2D, W: number, H: number, sc: Scene, pal: Palette) {
   const st = sc.v2v!;
+  const main = sc.vehicles;
   const scale = (W - PAD * 2) / V2V.length;
   const toX = (x: number) => PAD + x * scale;
 
-  /* 본선을 위쪽에 두고 램프를 깊게 내려 캔버스 세로를 실제로 쓴다.
-     이전 배치(본선 0.38H · 램프 0.30H)는 위아래로 각각 30% 가까이 비어 있었다. */
   const yMain = Math.round(H * 0.26);
-  const half = Math.max(7, Math.min(20, H * 0.075));
-  const rampDrop = Math.max(36, H * 0.50);
+  const laneHalf = Math.max(3, Math.min(16, (LANE_W / 2) * scale));
+  const drop = Math.max(26, H * 0.48);
+  /** 램프 위치 s → 본선으로부터의 세로 오프셋(px). 합류점에서 0. */
+  const rampOff = (s: number) => drop * Math.min(1, Math.max(0, (V2V.mergeAt - s) / RAMP_LEN));
+  const xTaper = toX(V2V.mergeAt - RAMP_LEN);
+  const xMerge = toX(V2V.mergeAt);
 
-  /** 램프 위치 s → 본선으로부터의 세로 오프셋(px). 합류점에서 0 — 두 차로가 만난다. */
-  const rampOff = (s: number) => rampDrop * Math.min(1, Math.max(0, (V2V.mergeAt - s) / RAMP_LEN));
-
-  /* --- 본선 -------------------------------------------------------- */
+  /* --- 노면: 테두리 먼저, 노면 나중 (교차·합류가 저절로 이어진다) ----- */
+  const band = laneHalf * 2;
   ctx.fillStyle = pal.hot;
-  dots(ctx, PAD, yMain - half, W - PAD, yMain - half, 4, 1);
-  dots(ctx, PAD, yMain + half, W - PAD, yMain + half, 4, 1);
+  line(ctx, PAD, yMain + drop, xTaper, yMain + drop, band + 2);
+  line(ctx, xTaper, yMain + drop, xMerge, yMain, band + 2);
+  line(ctx, PAD, yMain, W - PAD, yMain, band + 2);
+  ctx.fillStyle = pal.road;
+  line(ctx, PAD, yMain + drop, xTaper, yMain + drop, band);
+  line(ctx, xTaper, yMain + drop, xMerge, yMain, band);
+  line(ctx, PAD, yMain, W - PAD, yMain, band);
 
-  /* --- 합류로 ------------------------------------------------------
-     본선으로 수렴하는 자기 차로. 경계 두 줄이 있어야 "길"로 읽힌다. */
-  const stepS = RAMP_LEN / 110;
+  // 합류점 — 노면 위의 짧은 틱 하나. "여기서 합쳐진다"에 그 이상은 필요 없다.
   ctx.fillStyle = pal.hot;
-  for (let sm = V2V.mergeAt - RAMP_LEN; sm < V2V.mergeAt; sm += stepS) {
-    const y = yMain + rampOff(sm);
-    ctx.fillRect(Math.round(toX(sm)), Math.round(y - half), 1, 1);
-    ctx.fillRect(Math.round(toX(sm)), Math.round(y + half), 1, 1);
-  }
-
-  // 합류점 게이트 — 세로 틱으로 "여기서 합쳐진다"를 못박는다
-  ctx.fillStyle = pal.node;
-  for (let y = yMain - half - 8; y < yMain + half + 8; y += 4) {
-    ctx.fillRect(Math.round(toX(V2V.mergeAt)), Math.round(y), 1, 2);
-  }
+  ctx.fillRect(Math.round(xMerge), Math.round(yMain - laneHalf) - 5, 1, 4);
 
   const posOf = (v: Vehicle) => ({ x: toX(v.x), y: v.lane === 0 ? yMain : yMain + rampOff(v.x) });
 
   /* --- V2V 링크 ----------------------------------------------------
-     통신 반경 안에 들어온 쌍끼리 점멸한다. */
-  const blink = sc.t * 1.8 - Math.floor(sc.t * 1.8) < 0.7;
+     통신 반경 안의 쌍을 1px 실선으로 잇는다. 세는 방식은 계측값(`links`)과
+     같아야 하므로 건드리지 않는다. */
   let links = 0;
-  const main = sc.vehicles;
-
-  ctx.fillStyle = blink ? pal.linkOn : pal.linkOff;
+  const yLink = Math.round(yMain - laneHalf - 6);
+  ctx.fillStyle = pal.fgSoft;
   for (let i = 0; i + 1 < main.length; i++) {
     const a = main[i]!;
     const b = main[i + 1]!;
     if (b.x - a.x > V2V.range) continue;
     links++;
-    const pa = posOf(a);
-    const pb = posOf(b);
-    dots(ctx, pa.x, pa.y - half - 4, pb.x, pb.y - half - 4, 4, 1);
+    /* 본선끼리의 링크는 노면 위로 올려 긋는다 — 차가 한 줄이라 중심끼리 이으면
+       도로와 겹쳐 아무것도 안 보인다. 양끝의 짧은 세로 획이 "누구와 누구"를 맺는다. */
+    const xa = toX(a.x);
+    const xb = toX(b.x);
+    line(ctx, xa, yLink, xb, yLink);
+    ctx.fillRect(Math.round(xa), yLink, 1, 4);
+    ctx.fillRect(Math.round(xb), yLink, 1, 4);
   }
   for (const r of st.ramp) {
     const pr = posOf(r);
@@ -1459,77 +1686,59 @@ function drawV2V(ctx: CanvasRenderingContext2D, W: number, H: number, sc: Scene,
       if (Math.abs(m.x - r.x) > V2V.range) continue;
       links++;
       const pm = posOf(m);
-      dots(ctx, pr.x, pr.y, pm.x, pm.y, 4, 1);
+      line(ctx, pr.x, pr.y, pm.x, pm.y);
     }
   }
   st.links = links;
 
   /* --- 양보 간격 ----------------------------------------------------
-     "협조"의 실체는 본선 차량이 간격을 벌려 주는 순간이다.
-     떨어진 막대그래프 대신 **차량 사이에 직접 브래킷을 그어** 어느 간격인지 못박는다.
-     램프 차량이 끼어들 자리(가장 가까운 본선 쌍)는 시안으로 점등한다. */
-  const yieldPair = new Set<number>();
+     "협조"의 실체는 본선 후행차가 간격을 벌려 주는 순간이다. 램프 차량이 들어갈
+     그 한 쌍에만 브래킷을 긋는다 — 모든 쌍에 그으면 화면을 가로지르는 한 줄이 되어
+     개별 간격으로 읽히지 않는다. */
+  const yBr = Math.round(yMain - laneHalf - 16);
   for (const r of st.ramp) {
     if (r.x > V2V.mergeAt) continue;
-    let best = -1;
-    let bestD = Infinity;
-    for (let i = 0; i + 1 < main.length; i++) {
-      const mid = (main[i]!.x + main[i + 1]!.x) / 2;
-      const d = Math.abs(mid - r.x);
-      if (d < bestD) {
-        bestD = d;
-        best = i;
-      }
+    let leader: Vehicle | null = null;
+    let follower: Vehicle | null = null;
+    for (const m of main) {
+      if (m.x >= r.x) {
+        if (!leader || m.x < leader.x) leader = m;
+      } else if (!follower || m.x > follower.x) follower = m;
     }
-    if (best >= 0 && bestD < V2V.range) yieldPair.add(best);
-  }
-
-  const yBr = Math.round(yMain + half + 8);
-  for (let i = 0; i + 1 < main.length; i++) {
-    const a = main[i]!;
-    const b = main[i + 1]!;
-    const gap = b.x - a.x - CAR_LEN;
-    if (gap <= 0) continue;
-
-    const open = yieldPair.has(i);
-
-    /* 모든 쌍에 브래킷을 그으면 화면을 가로지르는 한 줄의 점선이 되어
-       "개별 간격"으로 읽히지 않는다. 합류가 걸린 쌍과 그 부근만 그린다. */
-    const mid = (a.x + b.x) / 2;
-    if (!open && Math.abs(mid - V2V.mergeAt) > V2V.range) continue;
-    // 평상시 간격도 읽혀야 비교가 된다 — avDim(0.32)은 너무 어두웠다.
-    ctx.fillStyle = open ? pal.av : pal.mute;
-
-    const xa = toX(a.x) + 2;
-    const xb = toX(b.x) - 2;
+    if (!leader || !follower) continue;
+    const xa = toX(follower.x) + 2;
+    const xb = toX(leader.x) - leader.length * scale - 2;
     if (xb - xa < 6) continue;
-
-    // 수평 브래킷 + 양끝 세로 틱 — 이 간격이 누구와 누구 사이인지 분명해진다
-    dots(ctx, xa, yBr, xb, yBr, 3, 1);
-    ctx.fillRect(Math.round(xa), Math.round(yBr) - 4, 1, 9);
-    ctx.fillRect(Math.round(xb), Math.round(yBr) - 4, 1, 9);
-
-    // 벌어지는 중인 간격은 차량까지 잇는 세로 유도선을 덧붙인다
-    if (open) {
-      dots(ctx, xa, yMain + half, xa, yBr - 4, 3, 1);
-      dots(ctx, xb, yMain + half, xb, yBr - 4, 3, 1);
-    }
+    ctx.fillStyle = pal.fg;
+    line(ctx, xa, yBr, xb, yBr);
+    ctx.fillRect(Math.round(xa), yBr - 3, 1, 7);
+    ctx.fillRect(Math.round(xb), yBr - 3, 1, 7);
   }
 
-  /* --- 차량 -------------------------------------------------------- */
+  /* --- 차량 --------------------------------------------------------- */
   const carLen = Math.max(6, CAR_LEN * scale);
-  const carWid = Math.max(4, Math.min(9, half * 0.85));
+  const carWid = Math.max(2, Math.min(laneHalf * 1.7, CAR_W * scale));
+  const vRef = V_REF.v2v;
   for (const v of main) {
     const p = posOf(v);
-    car(ctx, p.x, p.y, 0, carLen, carWid, pal.av, brakeOf(v, pal));
+    car(ctx, p.x, p.y, 0, carLen, carWid, pal.speed[sIdx(v.v, vRef)]!, brakeOf(v, pal), null);
   }
-  // 램프 차량은 합류 전까지 조금 흐리게 — 본선에 아직 속하지 않았다는 표시
+  // 합류 전의 램프 차량이 이 장면의 주인공이다 — 1px 테두리로 지목한다.
   for (const r of st.ramp) {
     const p = posOf(r);
-    car(ctx, p.x, p.y, 0, carLen, carWid, r.x < V2V.mergeAt ? pal.avDim : pal.av, brakeOf(r, pal));
+    car(
+      ctx,
+      p.x,
+      p.y,
+      0,
+      carLen,
+      carWid,
+      pal.speed[sIdx(r.v, vRef)]!,
+      brakeOf(r, pal),
+      r.x < V2V.mergeAt ? pal.fg : null,
+    );
   }
 }
-
 
 /* ------------------------------------------------------------------ *
  * 계측
@@ -1615,12 +1824,17 @@ function metricsOf(sc: Scene): TrafficMetrics {
  * 훅
  * ------------------------------------------------------------------ */
 
+/** 검사기가 읽는 그리기 비용. 화면에는 나가지 않는다 — `roadProbe` 와 같은 자리다. */
+interface SimCanvas extends HTMLCanvasElement {
+  simProbe?: { ms: number; max: number };
+}
+
+
 export function useTrafficSim(
   canvasRef: RefObject<HTMLCanvasElement | null>,
   { scenario, mode = 'acc', avCount = 0, target, reducedMotion = false, onMetrics }: TrafficSimOptions,
 ): void {
   const sceneRef = useRef<Scene | null>(null);
-  const palRef = useRef<Palette | null>(null);
   const drawRef = useRef<(dt: number, elapsed: number) => void>(() => {});
   const metricsRef = useRef(onMetrics);
   metricsRef.current = onMetrics;
@@ -1645,7 +1859,7 @@ export function useTrafficSim(
     const H = v.height;
     if (W < 8 || H < 8) return;
 
-    const pal = palRef.current ?? (palRef.current = buildPalette());
+    const pal = palette();
     let sc = sceneRef.current;
     const still = reducedRef.current;
 
@@ -1686,6 +1900,7 @@ export function useTrafficSim(
       sc.spreadSlow += (raw - sc.spreadSlow) * Math.min(1, dt * 0.22);
     }
 
+    const t0 = performance.now();
     ctx.fillStyle = pal.bg;
     ctx.fillRect(0, 0, W, H);
 
@@ -1693,6 +1908,17 @@ export function useTrafficSim(
     else if (sc.scenario === 'shockwave') drawRing(ctx, W, H, sc, pal);
     else if (sc.scenario === 'dispatch') drawDispatch(ctx, W, H, sc, pal);
     else drawV2V(ctx, W, H, sc, pal);
+
+    /* 그리기 비용(ms) — 검사기가 읽는 자리다. 도표를 더 얹기 전에 여기를 먼저 본다
+       (성능 예산 §7). EMA 라 한 프레임의 튐에 흔들리지 않는다. */
+    const probe = (canvasRef.current as SimCanvas | null)?.simProbe;
+    const ms = performance.now() - t0;
+    if (probe) {
+      probe.ms += (ms - probe.ms) * 0.1;
+      if (ms > probe.max) probe.max = ms;
+    } else if (canvasRef.current) {
+      (canvasRef.current as SimCanvas).simProbe = { ms, max: ms };
+    }
 
     // 계측값은 초당 5회만 내보낸다 — 숫자가 읽힐 속도로.
     emitRef.current += dt;

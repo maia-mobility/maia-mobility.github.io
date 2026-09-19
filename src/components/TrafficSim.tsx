@@ -78,15 +78,19 @@ const READOUTS: Record<SimScenario, Readout[]> = {
 /**
  * 구성 표기 — 연구 페이지에만 붙는다. 약어 대문자 나열(`22 VEH · RING 400 M`)이
  * 아니라 **한 줄짜리 문장**이다. 숫자와 단위만 모노로 남는다.
+ *
+ * 01·02 에는 도표의 **축이 무엇인지**가 한 절 붙는다. 캔버스에는 글자를 쓰지 않으므로
+ * (aria-hidden 이다) 눈금의 뜻은 읽는 글이 맡아야 한다 — 새 줄을 만들지 않고
+ * 이미 있는 이 한 줄에 넣는다.
  */
 const SETUP: Record<SimScenario, I18nText> = {
   platoon: {
-    en: `${PLATOON.count} vehicles · lead brake ${String(PLATOON.perturb.accel).replace('-', '−')} m/s² for ${PLATOON.perturb.duration} s · ${PLATOON.cycle} s cycle`,
-    ko: `차량 ${PLATOON.count}대 · 선두 제동 ${String(PLATOON.perturb.accel).replace('-', '−')} m/s² 로 ${PLATOON.perturb.duration}초 · ${PLATOON.cycle}초 주기`,
+    en: `${PLATOON.count} vehicles · lead brake ${String(PLATOON.perturb.accel).replace('-', '−')} m/s² for ${PLATOON.perturb.duration} s · speed profile 0–60 km/h over the ${PLATOON.cycle} s cycle`,
+    ko: `차량 ${PLATOON.count}대 · 선두 제동 ${String(PLATOON.perturb.accel).replace('-', '−')} m/s² 로 ${PLATOON.perturb.duration}초 · 아래는 ${PLATOON.cycle}초 주기 동안의 속도 0–60 km/h`,
   },
   shockwave: {
-    en: `${RING.count} vehicles on a ${RING.length} m ring · FollowerStopper automated vehicles`,
-    ko: `${RING.length} m 링 도로 위의 차량 ${RING.count}대 · FollowerStopper 자율주행차`,
+    en: `${RING.count} vehicles on a ${RING.length} m ring · FollowerStopper automated vehicles · space–time diagram 60 s × ${RING.length} m, coloured by speed`,
+    ko: `${RING.length} m 링 도로 위의 차량 ${RING.count}대 · FollowerStopper 자율주행차 · 오른쪽은 60초 × ${RING.length} m 시공간도, 색은 속도`,
   },
   dispatch: {
     en: `${DISPATCH.count} vehicles on a ${DISPATCH.cols}×${DISPATCH.rows} grid of streets · ${DISPATCH.length} m of road`,
