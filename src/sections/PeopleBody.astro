@@ -344,14 +344,20 @@ const CV = [
     margin: 0;
     display: flex;
     flex-wrap: wrap;
-    gap: 0 0;
+    gap: 0 1.4em;
+    overflow: clip;
     font-size: var(--t-lg);
     line-height: var(--lh-2);
     color: var(--fg);
   }
-  .role span:not(:last-child)::after {
+  .role span {
+    position: relative;
+  }
+  .role span + span::before {
     content: '·';
-    padding-inline: 0.7em;
+    position: absolute;
+    inset-inline-start: -0.7em;
+    transform: translateX(-50%);
     color: var(--line-hot);
   }
   .affil {
@@ -496,16 +502,25 @@ const CV = [
     padding: 0;
     display: flex;
     flex-wrap: wrap;
-    gap: var(--space-05) 0;
+    gap: var(--space-05) 1.4em;
+    overflow: clip;
     font-family: var(--font-mono);
     font-size: var(--t-micro);
     line-height: var(--lh-mono);
     letter-spacing: var(--track-mono-read);
     color: var(--fg-mute);
   }
-  .topics li:not(:last-child)::after {
+  /* 구분점은 다음 항목의 앞 여백에 절대 배치 + 상자 밖은 잘라 낸다 — 줄 끝·줄 앞
+     어디에도 점이 홀로 남지 않는다(HomeBody `.keys` 와 같은 규칙). */
+  .topics li {
+    position: relative;
+    white-space: nowrap;
+  }
+  .topics li + li::before {
     content: '·';
-    padding-inline: 0.7em;
+    position: absolute;
+    inset-inline-start: -0.7em;
+    transform: translateX(-50%);
     color: var(--line-hot);
   }
   .roster {

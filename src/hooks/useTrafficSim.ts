@@ -1189,12 +1189,14 @@ function drawRing(ctx: CanvasRenderingContext2D, W: number, H: number, sc: Scene
   const vs = sc.vehicles;
   const C = sc.circumference!;
 
-  // 넓은 화면에서는 링 옆에 속도 변동 시계열을 붙인다 — AV 를 넣으면 이 선이 내려앉는다.
+  // 넓은 화면에서는 링 옆에 속도 편차의 시계열 띠를 붙인다 — AV 를 넣으면 이 선이
+  // 기준선 아래로 내려앉는다. 링만 두면 넓은 캔버스(가로세로비 3.8)의 오른쪽 절반이
+  // 통째로 빈다.
   const wide = W >= 520;
-  const ringW = wide ? Math.round(W * 0.46) : W;
+  const ringW = wide ? Math.round(W * 0.42) : W;
   const cx = ringW / 2;
   const cy = H / 2;
-  const R = Math.max(26, Math.min(ringW * 0.4, H * 0.42) - 18);
+  const R = Math.max(26, Math.min(ringW * 0.46, H * 0.44) - 16);
   const half = Math.max(4, R * 0.05);
 
   ctx.fillStyle = pal.line;
@@ -1226,18 +1228,45 @@ function drawRing(ctx: CanvasRenderingContext2D, W: number, H: number, sc: Scene
 
   if (!wide) return;
 
-  /* --- 속도 변동 시계열 (최근 40초) --- */
-  const x0 = ringW + PAD;
+  /* --- 속도 편차 띠 (최근 40초) -------------------------------------------
+   *
+   * 링 옆에 점만 흩뿌린 **스파크라인**이었다. 축도 눈금도 기준선의 뜻도 없어서
+   * 내용이 아니라 장식으로 읽혔다("빈 자리에 떠 있는 선"). 지금은 축이 있는 띠다:
+   *   · 세로축 0 … 4 m/s — 왼쪽 변에 0·2·4 눈금 틱
+   *   · 가로축 최근 40초 — 아래 변에 10초마다 눈금 틱
+   *   · 앰버 기준선 = 검증된 0-AV 속도편차(scenarios.ts). AV 를 넣으면 시안 궤적이
+   *     이 선 아래로 내려온다 — 이 장면이 하려는 말 전부가 그 한 칸에 있다.
+   *
+   * 글자는 쓰지 않는다. 캔버스는 aria-hidden 이고, 읽는 값은 아래 계측 한 줄이 맡는다.
+   */
+  const x0 = ringW + PAD * 2;
   const x1 = W - PAD;
-  const yBot = Math.round(H * 0.86);
-  const yTop = Math.round(H * 0.16);
+  const yBot = H - PAD - 4;
+  const yTop = PAD + 4;
   const yOf = (v: number) => yBot - Math.min(1, v / HIST_FS) * (yBot - yTop);
 
-  ctx.fillStyle = pal.mute;
-  dots(ctx, x0, yBot, x1, yBot, 5, 1);
-  // 검증된 0-AV 기준선 (scenarios.ts)
+  // 세로축 — 점선 헤어라인 + 0·2·4 m/s 눈금 틱
+  ctx.fillStyle = pal.line;
+  dots(ctx, x0, yTop, x0, yBot, 5, 1);
   ctx.fillStyle = pal.hot;
-  dots(ctx, x0, yOf(RING.spreadByAV[0] ?? 3.09), x1, yOf(RING.spreadByAV[0] ?? 3.09), 7, 1);
+  for (let v = 0; v <= HIST_FS; v += HIST_FS / 2) {
+    const y = Math.round(yOf(v));
+    ctx.fillRect(x0 - 4, y, 4, 1);
+  }
+
+  // 가로축 — 10초 눈금. 시간이 실제로 흐른다는 것을 눈금이 말한다.
+  ctx.fillStyle = pal.line;
+  dots(ctx, x0, yBot, x1, yBot, 5, 1);
+  ctx.fillStyle = pal.hot;
+  const secs = HIST_N * HIST_STEP;
+  for (let t = 0; t <= secs; t += 10) {
+    const x = Math.round(x0 + (t / secs) * (x1 - x0));
+    ctx.fillRect(x, yBot + 1, 1, 4);
+  }
+
+  // 검증된 0-AV 기준선 (scenarios.ts). 앰버 = 사람이 모는 교통 — 링의 차와 같은 색이다.
+  ctx.fillStyle = pal.humanDim;
+  dots(ctx, x0, yOf(RING.spreadByAV[0] ?? 3.09), x1, yOf(RING.spreadByAV[0] ?? 3.09), 6, 1);
 
   // 트레이스는 점으로만 찍는다 — 막대로 채우면 화면이 무거워지고 추세가 안 읽힌다.
   const wpx = (x1 - x0) / HIST_N;

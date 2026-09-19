@@ -69,25 +69,45 @@ export const RESEARCH: ResearchArea[] = [
 ];
 
 /**
- * 시뮬레이션 화면에 얹히는 HUD 라벨.
- * 연구 설명문이 아니라 **지금 화면에서 무엇이 벌어지고 있는지** 알려주는 계측 표기다.
+ * 시뮬레이션 화면에 얹히는 범례.
+ *
+ * `readout` 은 **이 계측기가 지금 무엇을 보여주는지** 한 문장으로 적는다.
+ * 연구 설명문이 아니다(연구분야에 설명문을 두지 않는다: 교수님 결정) — 화면에서
+ * 실제로 벌어지는 일을 가리키는 캡션이고, 그래서 연구 페이지에만 붙는다.
+ *
+ * 한때 `AV PENETRATION → WAVE DAMPING` 같은 **"A → B" 공식**을 전부 대문자로
+ * 세워 두었다. 네 개가 같은 꼴이라 계측기가 아니라 슬라이드 제목으로 읽혔고,
+ * "너무 AI 스럽다"는 말을 들은 자리 가운데 하나다. 문장 케이스·자간 0·마침표 없음.
+ *
+ * `axis` 는 토글 묶음의 이름이다(그 묶음의 `aria-label` 이기도 하다).
+ * 토글이 없는 시나리오에는 두지 않는다 — 가리킬 것이 없는 라벨은 라벨이 아니다.
  */
-export const SIM_LEGEND: Record<SimScenario, { readout: I18nText; axis: I18nText }> = {
+export const SIM_LEGEND: Record<SimScenario, { readout: I18nText; axis?: I18nText }> = {
   platoon: {
-    readout: { en: 'LEAD BRAKE → UPSTREAM RESPONSE', ko: '선두 감속 → 후속 반응 전파' },
-    axis: { en: 'HEADWAY', ko: '차간거리' },
+    readout: {
+      en: 'The lead car brakes and the disturbance travels back through the platoon, growing or fading with the driver model',
+      ko: '선두 차가 제동하면 그 교란이 대열을 거슬러 전해지고, 주행 모델에 따라 커지거나 잦아든다',
+    },
+    axis: { en: 'Driver model', ko: '주행 모델' },
   },
   shockwave: {
-    readout: { en: 'AV PENETRATION → WAVE DAMPING', ko: '자율주행차 침투율 → 파동 감쇠' },
-    axis: { en: 'AV SHARE', ko: '자율주행 비율' },
+    readout: {
+      en: 'A stop-and-go wave on a ring, and what a few automated vehicles do to it',
+      ko: '링 도로를 도는 정체 파동과, 자율주행차 몇 대가 그것을 잦아들게 하는 과정',
+    },
+    axis: { en: 'Automated vehicles', ko: '자율주행차 대수' },
   },
   dispatch: {
-    readout: { en: 'DEMAND NODE → VEHICLE ASSIGNMENT', ko: '수요 노드 → 차량 배차' },
-    axis: { en: 'WAIT TIME', ko: '대기시간' },
+    readout: {
+      en: 'Requests appear across a grid of streets and the nearest idle vehicle drives over to pick them up',
+      ko: '격자 도로망에 호출이 뜨면 가장 가까운 유휴 차량이 그 자리로 태우러 간다',
+    },
   },
   v2v: {
-    readout: { en: 'V2V LINK → COOPERATIVE MERGE', ko: 'V2V 링크 → 협조 합류' },
-    axis: { en: 'LINK RANGE', ko: '통신 범위' },
+    readout: {
+      en: 'Two vehicles open a link once they are within range, and use it to make room for a merge',
+      ko: '통신 범위에 든 두 차가 링크를 맺고, 그 링크로 합류할 자리를 내준다',
+    },
   },
 };
 

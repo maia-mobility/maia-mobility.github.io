@@ -45,33 +45,41 @@
   --hud-surface: var(--bg);
 }
 
-/* --- 머리: 계측 표기 한 줄 + 토글 --------------------------------------- */
+/* --- 머리: 무엇을 보고 있는지 적는 한 줄 + 토글 ------------------------- */
 .head {
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
-  gap: var(--space-2);
+  gap: var(--space-2) var(--space-3);
   flex-wrap: wrap;
 }
 
+/*
+ * 계측기가 무엇을 보여주는지 적는 문장.
+ *
+ * `AV PENETRATION → WAVE DAMPING` 이었다 — 대문자 + 넓은 자간 + 화살표 공식.
+ * 네 시나리오가 전부 같은 꼴이라 계측 표기가 아니라 **슬라이드 제목**으로 읽혔다.
+ * 지금은 본문 글꼴의 평서문이다: 읽는 글에는 읽는 글의 조판을 준다.
+ */
 .readout {
   margin: 0;
-  font-family: var(--font-mono);
-  font-size: var(--t-mono-sm);
-  line-height: var(--lh-mono);
-  letter-spacing: var(--track-mono);
-  text-transform: uppercase;
-  color: var(--accent);
+  max-inline-size: 58ch;
+  font-family: var(--font-sans);
+  font-size: var(--t-sm);
+  line-height: var(--lh-body);
+  letter-spacing: var(--track-body);
+  color: var(--fg-mute);
+  text-wrap: pretty;
 }
 
+/* 토글 묶음의 이름. 라벨이지 계측값이 아니므로 대문자·자간을 걷었다. */
 .axis {
   margin: 0;
-  font-family: var(--font-mono);
-  font-size: var(--t-micro);
+  font-family: var(--font-sans);
+  font-size: var(--t-xs);
   line-height: var(--lh-mono);
-  letter-spacing: var(--track-label);
-  text-transform: uppercase;
-  color: var(--fg-dim);
+  letter-spacing: var(--track-body);
+  color: var(--fg-mute);
   white-space: nowrap;
 }
 
@@ -151,7 +159,12 @@
 }
 
 /* --- 수치판 ------------------------------------------------------------- */
-/* 수치와 그 상태 표시를 한 덩어리로 묶는다 — 상태 줄은 숫자의 각주이지 별개 블록이 아니다. */
+/*
+ * **한 줄짜리 텔레메트리다.** 라벨 + 큰 숫자 + 단위를 네 칸에 나란히 세운 격자였는데,
+ * 그것은 이 화면의 어휘가 아니라 대시보드의 히어로 메트릭 템플릿이다 —
+ * 시뮬레이션에서 읽어 온 값 넷을 계측기가 한 줄에 흘리는 것이 맞다.
+ * 결론값(첫 항목)은 크기가 아니라 **굵기 한 단계**로만 선다.
+ */
 .readings {
   display: grid;
   gap: var(--space-1);
@@ -159,85 +172,117 @@
 }
 
 .hud {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr));
-  gap: var(--space-2) var(--space-3);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  /* 열 간격이 곧 구분점의 자리다 — 점은 그 한가운데에 앉는다(아래 `.cell + .cell::before`). */
+  gap: var(--space-1) 1.4em;
   margin: 0;
+  /* 구분점은 **다음 항목의 앞 여백에 절대 배치**하고, 목록 상자가 넘친 것을 잘라 낸다
+     (`overflow: clip`). 그러면 줄이 바뀔 때 첫 항목의 점은 상자 밖(왼쪽)으로 나가 보이지
+     않고, 줄 끝에는 점이 애초에 없다. 앞 항목에 `::after` 로 붙였을 때는 줄 끝에 점이
+     홀로 남았고(`Lead drop 0.0 km/h ·` 뒤에 줄바꿈), `li + li::before` 로 흘려 두었을
+     때는 다음 줄 맨 앞에 떨어졌다 — 둘 다 스크린샷에서 잡혔다. */
+  overflow: clip;
 }
 
 .cell {
-  display: grid;
-  gap: 2px;
+  position: relative;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.45em;
   min-inline-size: 0;
+  white-space: nowrap;
+}
+
+.cell + .cell::before {
+  content: '·';
+  position: absolute;
+  inset-inline-start: -0.7em;
+  /* 셀은 라벨(sans)과 수치(mono)가 기준선으로 정렬된 상자라 정적 위치가 바닥에
+     깔린다 — 점은 상자의 세로 중앙에 둔다. 크기는 라벨의 것. */
+  inset-block-start: 50%;
+  transform: translate(-50%, -55%);
+  font-size: var(--t-sm);
+  line-height: 1;
+  color: var(--line-hot);
 }
 
 .cellLabel {
-  font-family: var(--font-mono);
-  font-size: var(--t-micro);
+  font-family: var(--font-sans);
+  font-size: var(--t-xs);
   line-height: var(--lh-mono);
-  letter-spacing: var(--track-label);
-  text-transform: uppercase;
-  color: var(--fg-dim);
+  letter-spacing: var(--track-body);
+  color: var(--fg-mute);
 }
 
+/* 숫자만 모노다 — tabular 자리수가 프레임마다 흔들리지 않게 한다. */
 .cellValue {
   display: flex;
   align-items: baseline;
-  gap: 0.35em;
+  gap: 0.3em;
   margin: 0;
   font-family: var(--font-mono);
-  font-size: var(--t-base);
+  font-size: var(--t-sm);
   line-height: var(--lh-mono);
   color: var(--fg);
   font-variant-numeric: tabular-nums;
 }
 
-/* 첫 칸이 그 시나리오의 결론값이다 — 크게, 시안으로 점등. */
+/* 첫 칸이 그 시나리오의 결론값이다. 크기 점프가 아니라 굵기 한 단계. */
 .cellLead .cellValue {
-  font-size: var(--t-h3);
-  line-height: var(--lh-1);
-  color: var(--accent);
+  font-weight: var(--w-mono-em);
 }
 
 .figure {
   font-variant-numeric: tabular-nums;
 }
 
+/* 단위는 SI 표기 그대로(`m/s`·`km/h`) — 대문자로 세우면 단위가 아니라 라벨이 된다. */
 .unit {
-  font-size: var(--t-micro);
-  letter-spacing: var(--track-label);
-  text-transform: uppercase;
-  color: var(--fg-dim);
+  color: var(--fg-mute);
 }
 
 /* --- 측정 상태 표시등 ---------------------------------------------------- */
-/* 계측 장비의 annunciator. 결론값이 확정되기 전에는 여기에 그 사실이 적힌다 —
-   플래툰은 제동파가 후미를 지나가야, 링은 2바퀴 측정 창이 차야 값이 확정된다. */
+/*
+ * 계측 장비의 annunciator. 결론값이 확정되기 전에는 여기에 그 사실이 적힌다 —
+ * 플래툰은 제동파가 후미를 지나가야, 링은 2바퀴 측정 창이 차야 값이 확정된다.
+ *
+ * 문구는 사람 말이다(`■ SETTLING · 2-LAP WINDOW 8/104 S` 이었다).
+ * 표시등도 유니코드 글리프가 아니라 CSS 로 그린 사각 틱이다 — 하드 룰 7.
+ */
 .state {
+  display: flex;
+  align-items: baseline;
+  gap: 0.7em;
   margin: 0;
-  font-family: var(--font-mono);
-  font-size: var(--t-micro);
+  font-family: var(--font-sans);
+  font-size: var(--t-xs);
   line-height: var(--lh-mono);
-  letter-spacing: var(--track-label);
-  text-transform: uppercase;
-  color: var(--fg-dim);
+  letter-spacing: var(--track-body);
+  color: var(--fg-mute);
   font-variant-numeric: tabular-nums;
-  text-wrap: balance;
+  text-wrap: pretty;
 }
 
-/* 상태 표시등의 사각 틱. 글리프는 장식이라 스크린리더에서 감춘다(버튼의 ▸ 와 같은 규칙). */
-.tick {
-  margin-inline-end: 0.7em;
+.state::before {
+  content: '';
+  flex: none;
+  inline-size: 6px;
+  block-size: 6px;
+  border: var(--hair) solid currentColor;
+  /* 기준선에 앉히는 광학 보정 — 사각 틱은 글자와 달리 제 기준선이 없다. */
+  transform: translateY(-1px);
 }
 
-/* 측정 중은 앰버 — 이 팔레트에서 앰버는 시안(확정·제어)에 대비되는 보조 신호다. */
-.state[data-state='measuring'] {
-  color: var(--warn);
+/* 측정 중에는 틱이 차 있다. 확정되면 테두리만 남는다 — 색이 아니라 **상태의 모양**이다. */
+.state[data-state='measuring']::before {
+  background-color: currentColor;
 }
 
 /* 사이클이 끝나야 뜻이 생기는 누적값은 확정 전까지 흐리게 찍는다. */
 .hud[data-state='measuring'] .provisional .cellValue {
-  color: var(--fg-mute);
+  color: var(--fg-dim);
 }
 
 /* 읽힌 값이 없으면 단위도 붙이지 않는다 — "— ×" 는 계측값처럼 보인다. */
@@ -253,9 +298,10 @@
   font-family: var(--font-mono);
   font-size: var(--t-micro);
   line-height: var(--lh-mono);
-  /* 구성 표기는 라벨이 아니라 **한 줄짜리 문장**이다(`22 VEH · RING 400 M ·
-     FOLLOWERSTOPPER AV × 0` — 44자). 그 길이를 전부 대문자로 세우면 낱말 윤곽이
-     사라져 한 글자씩 읽게 된다. 짧은 계측 라벨(`SPEED SPREAD`)은 대문자로 둔다. */
+  /* 구성 표기는 라벨이 아니라 **한 줄짜리 문장**이다. 한때 약어를 대문자로 나열
+     했는데(`22 VEH · RING 400 M · FOLLOWERSTOPPER AV × 0`) 낱말 윤곽이 사라져
+     한 글자씩 읽게 됐다. 지금은 문장 케이스이고, 모노로 남은 이유는 여기 실린
+     것이 **수치와 단위**이기 때문이다. */
   letter-spacing: var(--track-mono-read);
   color: var(--fg-dim);
   font-variant-numeric: tabular-nums;
@@ -271,10 +317,6 @@
 
   .canvas {
     block-size: 176px;
-  }
-
-  .hud {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 

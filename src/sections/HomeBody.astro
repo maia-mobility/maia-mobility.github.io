@@ -352,9 +352,9 @@ const RECRUIT_NOTE = RECRUIT.length > 1 ? RECRUIT[RECRUIT.length - 1] : '';
     padding: 0;
     display: flex;
     flex-wrap: wrap;
-    /* 열 간격은 0 — 낱말 사이를 벌리는 일은 구분점이 자기 좌우 여백으로 한다.
-       gap 과 '· ' 가 겹쳐 구분점이 허공에 떠 있던 것을 고쳤다. */
-    gap: var(--space-1) 0;
+    /* 열 간격이 곧 구분점의 자리다 — 점은 그 한가운데에 앉는다(아래 `li + li::before`). */
+    gap: var(--space-1) 1.4em;
+    overflow: clip;
     font-family: var(--font-mono);
     font-size: var(--t-micro);
     line-height: var(--lh-mono);
@@ -362,11 +362,20 @@ const RECRUIT_NOTE = RECRUIT.length > 1 ? RECRUIT[RECRUIT.length - 1] : '';
     color: var(--fg-mute);
   }
   .keys li { white-space: nowrap; }
-  /* 구분점은 **앞 낱말에 붙는다.** `li + li::before` 로 두면 줄이 바뀔 때 점이
-     다음 줄 맨 앞에 떨어진다(02·04 막에서 실제로 그랬다). */
-  .keys li:not(:last-child)::after {
+  /* 구분점은 **다음 항목의 앞 여백에 절대 배치**하고, 목록 상자가 넘친 것을 잘라 낸다
+     (`overflow: clip`). 그러면 줄이 바뀔 때 첫 항목의 점은 상자 밖(왼쪽)으로 나가 보이지
+     않고, 줄 끝에는 점이 애초에 없다. 앞 항목에 `::after` 로 붙였을 때는 줄 끝에 점이
+     홀로 남았고(`Lead drop 0.0 km/h ·` 뒤에 줄바꿈), `li + li::before` 로 흘려 두었을
+     때는 다음 줄 맨 앞에 떨어졌다 — 둘 다 스크린샷에서 잡혔다. */
+  .keys li {
+    position: relative;
+    white-space: nowrap;
+  }
+  .keys li + li::before {
     content: '·';
-    padding-inline: 0.7em;
+    position: absolute;
+    inset-inline-start: -0.7em;
+    transform: translateX(-50%);
     color: var(--line-hot);
   }
   /* 계측기는 화면 끝까지 간다 — 여백에 얹은 카드가 아니라 도로에서 잘라 온 창이다. */
