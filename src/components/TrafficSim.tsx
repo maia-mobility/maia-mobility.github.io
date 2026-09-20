@@ -1,9 +1,10 @@
-import { useRef, useState } from 'react';
+import { useRef, useState, type CSSProperties } from 'react';
 import { useTrafficSim, type PlatoonMode, type TrafficMetrics } from '../hooks/useTrafficSim';
 import { usePrefersReducedMotion } from '../hooks/usePrefersReducedMotion';
 import HudFrame from './HudFrame';
 import { SIM_LEGEND, type SimScenario } from '../data/research';
 import { DISPATCH, PLATOON, RING, V2V } from '../lib/scenarios';
+import { AXIS, frac, PLOT_MARGIN } from '../lib/plot';
 import { pick, type Lang } from '../i18n';
 import type { I18nText } from '../i18n/types';
 import s from './TrafficSim.module.css';
@@ -79,18 +80,17 @@ const READOUTS: Record<SimScenario, Readout[]> = {
  * 구성 표기 — 연구 페이지에만 붙는다. 약어 대문자 나열(`22 VEH · RING 400 M`)이
  * 아니라 **한 줄짜리 문장**이다. 숫자와 단위만 모노로 남는다.
  *
- * 01·02 에는 도표의 **축이 무엇인지**가 한 절 붙는다. 캔버스에는 글자를 쓰지 않으므로
- * (aria-hidden 이다) 눈금의 뜻은 읽는 글이 맡아야 한다 — 새 줄을 만들지 않고
- * 이미 있는 이 한 줄에 넣는다.
+ * 도표의 축이 무엇인지는 여기 적지 않는다 — **축이 스스로 말한다**(눈금 숫자와
+ * 축 제목이 캔버스 위에 HTML 로 서 있다, 아래 `FIG`).
  */
 const SETUP: Record<SimScenario, I18nText> = {
   platoon: {
-    en: `${PLATOON.count} vehicles · lead brake ${String(PLATOON.perturb.accel).replace('-', '−')} m/s² for ${PLATOON.perturb.duration} s · speed profile 0–60 km/h over the ${PLATOON.cycle} s cycle`,
-    ko: `차량 ${PLATOON.count}대 · 선두 제동 ${String(PLATOON.perturb.accel).replace('-', '−')} m/s² 로 ${PLATOON.perturb.duration}초 · 아래는 ${PLATOON.cycle}초 주기 동안의 속도 0–60 km/h`,
+    en: `${PLATOON.count} vehicles · lead brake ${String(PLATOON.perturb.accel).replace('-', '−')} m/s² for ${PLATOON.perturb.duration} s · ${PLATOON.cycle} s cycle`,
+    ko: `차량 ${PLATOON.count}대 · 선두 제동 ${String(PLATOON.perturb.accel).replace('-', '−')} m/s² 로 ${PLATOON.perturb.duration}초 · ${PLATOON.cycle}초 주기`,
   },
   shockwave: {
-    en: `${RING.count} vehicles on a ${RING.length} m ring · FollowerStopper automated vehicles · space–time diagram 60 s × ${RING.length} m, coloured by speed`,
-    ko: `${RING.length} m 링 도로 위의 차량 ${RING.count}대 · FollowerStopper 자율주행차 · 오른쪽은 60초 × ${RING.length} m 시공간도, 색은 속도`,
+    en: `${RING.count} vehicles on a ${RING.length} m ring · FollowerStopper automated vehicles`,
+    ko: `${RING.length} m 링 도로 위의 차량 ${RING.count}대 · FollowerStopper 자율주행차`,
   },
   dispatch: {
     en: `${DISPATCH.count} vehicles on a ${DISPATCH.cols}×${DISPATCH.rows} grid of streets · ${DISPATCH.length} m of road`,
@@ -101,6 +101,39 @@ const SETUP: Record<SimScenario, I18nText> = {
     ko: `차량 ${V2V.count}대 · 통신 범위 ${V2V.range} m · ${V2V.mergeAt} m 지점에서 합류`,
   },
 };
+
+/**
+ * 도표의 축 제목과 설명.
+ *
+ * 캔버스에는 글자를 쓰지 않는다(aria-hidden 이다). 그래서 눈금 숫자와 축 제목은
+ * 캔버스 **위에 얹힌 HTML** 이고, 자리는 훅이 내보낸 `--plot-*` 변수가 정한다
+ * (`src/lib/plot.ts` 가 그 좌표의 유일한 출처다). 눈금 개수가 고정이라 요소도
+ * 고정이고, 프레임마다 DOM 이 바뀌는 일은 없다.
+ *
+ * `figcaption` 은 눈에 보이지 않는다 — 캔버스가 aria-hidden 이라 이 그림을
+ * **말로 대신 읽어 주는 한 문장**이 하나는 있어야 한다.
+ */
+const FIG: Partial<Record<SimScenario, { x: I18nText; y: I18nText; caption: I18nText }>> = {
+  platoon: {
+    x: { en: 'Time (s)', ko: '시간 (s)' },
+    y: { en: 'Relative to lead (m)', ko: '선두차 기준 (m)' },
+    caption: {
+      en: `Time–space diagram: the trajectory of each of the ${PLATOON.count} cars over the first 30 s, measured from the lead car. The vertical distance between two lines is the gap between those two cars.`,
+      ko: `시공도 — ${PLATOON.count}대의 궤적 30초. 선두차를 기준으로 잰 위치이고, 두 선 사이의 세로 간격이 곧 그 두 차의 차간거리다.`,
+    },
+  },
+  shockwave: {
+    x: { en: 'Time (s)', ko: '시간 (s)' },
+    y: { en: 'Position on ring (m)', ko: '링 위 위치 (m)' },
+    caption: {
+      en: `Time–space diagram: the last 60 s on the ${RING.length} m ring, one line per car, coloured by speed. A red band running backwards is a stop-and-go wave.`,
+      ko: `시공도 — ${RING.length} m 링의 최근 60초. 차 한 대가 선 하나이고 색은 속도다. 뒤로 흐르는 붉은 띠가 정체 파동이다.`,
+    },
+  },
+};
+
+/** 눈금 숫자. 음수는 하이픈이 아니라 마이너스 기호(−)다. */
+const tickText = (v: number): string => (v < 0 ? `−${Math.abs(v)}` : String(v));
 
 const MODES: { key: PlatoonMode; label: string }[] = [
   { key: 'human', label: PLATOON.modes.human.label },
@@ -226,6 +259,8 @@ export default function TrafficSim({ scenario, lang, compact = false }: TrafficS
     onMetrics,
   });
 
+  const plotAxis = AXIS[scenario];
+  const fig = FIG[scenario];
   const legend = SIM_LEGEND[scenario];
   const axis = legend.axis ? pick(legend.axis, lang) : undefined;
   const hasToggles = scenario === 'platoon' || scenario === 'shockwave';
@@ -290,7 +325,45 @@ export default function TrafficSim({ scenario, lang, compact = false }: TrafficS
 
         {/* `data-sim` 은 CSS 가 읽는다 — 장면 아래에 도표가 한 장 더 서는 01·02 는
             좁은 화면에서 세로로 쌓이므로 캔버스가 더 높아야 한다. */}
-        <canvas ref={canvasRef} className={s.canvas} data-sim={scenario} aria-hidden="true" />
+        {/* 왼쪽 여백은 훅이 아니라 **상수**다 — 세로 축 제목이 플롯 왼쪽 끝에서
+            얼마나 더 왼쪽에 서는지를 이 값 하나로 정한다(`src/lib/plot.ts`). */}
+        <figure
+          className={s.plot}
+          style={{ '--plot-ml': `${PLOT_MARGIN.left}px` } as CSSProperties}
+        >
+          <canvas ref={canvasRef} className={s.canvas} data-sim={scenario} aria-hidden="true" />
+          {plotAxis && fig ? (
+            <>
+              {plotAxis.x.ticks.map((v) => (
+                <span
+                  key={`x${v}`}
+                  className={[s.tick, s.tickX].join(' ')}
+                  style={{ '--f': frac(v, plotAxis.x) } as CSSProperties}
+                  aria-hidden="true"
+                >
+                  {tickText(v)}
+                </span>
+              ))}
+              {plotAxis.y.ticks.map((v) => (
+                <span
+                  key={`y${v}`}
+                  className={[s.tick, s.tickY].join(' ')}
+                  style={{ '--f': frac(v, plotAxis.y) } as CSSProperties}
+                  aria-hidden="true"
+                >
+                  {tickText(v)}
+                </span>
+              ))}
+              <span className={[s.axisT, s.axisX].join(' ')} aria-hidden="true">
+                {pick(fig.x, lang)}
+              </span>
+              <span className={[s.axisT, s.axisY].join(' ')} aria-hidden="true">
+                {pick(fig.y, lang)}
+              </span>
+              <figcaption className="visually-hidden">{pick(fig.caption, lang)}</figcaption>
+            </>
+          ) : null}
+        </figure>
 
         {/* 모드·AV 대수를 바꾸면 측정이 처음부터 다시 시작한다. key 를 갈아 끼워
             수치판을 통째로 새로 마운트하면 이전 측정의 숫자가 한 프레임도 남지 않는다. */}

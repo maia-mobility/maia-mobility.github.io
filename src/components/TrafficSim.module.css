@@ -38,6 +38,12 @@
  * 프레임에서도 감쇠 마스크를 굽고 스크롤을 따라 한 장씩 다시 그린다 —
  * 접근성 설정을 켠 사람만 다른 화면을 보는 일이 없어야 한다.
  */
+/* 홈 패널에서는 축 제목을 뺀다 — 한 화면(act)에 두는 것은 번호·이름·키워드·계측기
+   넷뿐이고, 눈금 숫자만으로도 축이 무엇인지는 읽힌다. */
+.compact .axisT {
+  display: none;
+}
+
 .compact {
   gap: var(--space-2);
   background-color: transparent;
@@ -149,13 +155,99 @@
 }
 
 /* --- 캔버스 ------------------------------------------------------------- */
+/*
+ * 도표 한 장(figure) — 캔버스와 **그 위에 얹힌 축 라벨**.
+ *
+ * 캔버스에는 글자를 쓰지 않는다(aria-hidden 이다). 눈금 숫자와 축 제목은 HTML 이고,
+ * 자리는 훅이 내보낸 `--plot-x0…--plot-y1`(CSS px, 캔버스 안쪽 좌표)가 정한다.
+ * 그 변수의 출처는 `src/lib/plot.ts` 하나다 — 그림과 라벨이 같은 자를 쓴다.
+ *
+ * 헤어라인은 캔버스가 아니라 이 상자에 있다. 절대 배치의 기준(패딩 상자)이
+ * 캔버스의 내용 상자와 정확히 겹쳐야 라벨이 1px 도 밀리지 않는다.
+ */
+.plot {
+  position: relative;
+  margin: 0;
+  min-inline-size: 0;
+  border-block-start: var(--hair) solid var(--line);
+  border-block-end: var(--hair) solid var(--line);
+}
+
 .canvas {
   display: block;
   inline-size: 100%;
   block-size: clamp(184px, 24vw, 300px);
   background-color: var(--bg);
-  border-block-start: var(--hair) solid var(--line);
-  border-block-end: var(--hair) solid var(--line);
+}
+
+/* 좌표가 오기 전(하이드레이션 전·도표가 없는 크기)에는 라벨이 서지 않는다. */
+.tick,
+.axisT {
+  position: absolute;
+  color: var(--fg-dim);
+  pointer-events: none;
+  opacity: 0;
+}
+
+.plot[data-plot] .tick,
+.plot[data-plot] .axisT {
+  opacity: 1;
+}
+
+/* 눈금 숫자 — 계측 수치라 모노 tabular. */
+.tick {
+  font-family: var(--font-mono);
+  font-size: var(--t-micro);
+  line-height: 1;
+  letter-spacing: var(--track-mono-read);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.tickX {
+  inset-block-start: calc(var(--plot-y1) + 7px);
+  inset-inline-start: calc(var(--plot-x0) + (var(--plot-x1) - var(--plot-x0)) * var(--f));
+  transform: translateX(-50%);
+}
+
+.tickY {
+  inset-block-start: calc(var(--plot-y1) - (var(--plot-y1) - var(--plot-y0)) * var(--f));
+  inset-inline-end: calc(100% - var(--plot-x0) + 8px);
+  transform: translateY(-50%);
+}
+
+/* 축 제목 — 읽는 글이므로 sans, 문장 케이스. */
+.axisT {
+  font-family: var(--font-sans);
+  font-size: var(--t-xs);
+  line-height: 1;
+  letter-spacing: var(--track-body);
+  white-space: nowrap;
+}
+
+.axisX {
+  inset-block-start: calc(var(--plot-y1) + 20px);
+  inset-inline-start: calc(var(--plot-x0) + (var(--plot-x1) - var(--plot-x0)) * 0.5);
+  transform: translateX(-50%);
+}
+
+/*
+ * 세로 축 제목 — 여기만 **물리 속성**을 쓴다.
+ * 논리 속성(`inset-inline-start`)은 그 요소 **자신의** writing-mode 로 풀리는데,
+ * 이 요소는 `vertical-rl` 이라 inline-start 가 위쪽이 된다. 그래서 논리로 적으면
+ * 제목이 도표 오른쪽 위에 가서 선다(실제로 그렇게 났다).
+ */
+.axisY {
+  top: var(--plot-y0);
+  /* 플롯 왼쪽 끝에서 왼쪽 여백만큼 나온 자리 — 01 은 링 인셋 오른쪽에 도표가 서므로
+     캔버스 왼쪽 끝(0)이 아니다. */
+  left: calc(var(--plot-x0) - var(--plot-ml) + 1px);
+  height: calc(var(--plot-y1) - var(--plot-y0));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
 }
 
 /* --- 수치판 ------------------------------------------------------------- */

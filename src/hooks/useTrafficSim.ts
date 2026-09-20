@@ -12,6 +12,7 @@ import {
   type Vehicle,
 } from '../lib/idm';
 import { DISPATCH, PLATOON, RING, V2V } from '../lib/scenarios';
+import { AXIS, frac, plotRect, SCENE, WIDE_MIN, type Axis, type PlotRect } from '../lib/plot';
 import type { SimScenario } from '../data/research';
 
 /* ============================================================================
@@ -249,24 +250,19 @@ const LANE_W = 3.5;
 const HIST_N = 160;
 const HIST_STEP = 0.25;
 
-/* --- 링 시공간도(space–time diagram) -------------------------------- *
- * Sugiyama(2008) · Stern et al.(2018) 링 실험 논문의 그림 그대로다:
- * 가로 = 시간, 세로 = 링 위의 위치, 점의 색 = 그 순간 그 차의 속도.
- * 정체 파동은 **뒤로 밀려가는 붉은 띠**로 나타난다.
- *
- * 매 프레임 60초 × 22대를 다시 찍지 않는다 — 열 하나(0.25s)씩 오프스크린
- * 이미지에 덧쓰고(`sampleSpace`), 그리기는 `drawImage` 두 번이다.
+/* --- 시공도(time–space diagram) ------------------------------------ *
+ * 두 장면(01 링 · 02 플래툰)의 도표는 전부 시공도다: 가로 시간, 세로 위치,
+ * 선의 색은 그 순간의 속도. 축과 눈금의 뜻은 `src/lib/plot.ts` 가 정한다.
  * ------------------------------------------------------------------ */
+
+/** 01 시공도의 열 수 — 0.25s × 240 = 60초(= `AXIS.shockwave.x.max`). */
 const ST_COLS = 240;
-const ST_ROWS = 100;
-/** 시공간도가 담는 시간(s) = 240열 × 0.25s. */
+/** 01 시공도가 담는 시간(s). */
 const ST_SPAN = ST_COLS * HIST_STEP;
 
-/** 플래툰 v(t) 프로파일 — 한 주기(45s)를 0.25s 간격으로. */
+/** 02 시공도 — 한 주기 앞 30초를 0.25s 간격으로. */
 const PROF_STEP = 0.25;
-const PROF_N = Math.round(PLATOON.cycle / PROF_STEP) + 1;
-/** v(t) 세로축 풀스케일(m/s) = 60 km/h. 눈금은 20 km/h 마다. */
-const PROF_FS = 60 / 3.6;
+const PROF_N = Math.round((AXIS.platoon?.x.max ?? 30) / PROF_STEP) + 1;
 
 /* --- 확정 판정 상수 -------------------------------------------------- *
  * 물리를 바꾸는 값이 아니라 **언제 숫자를 확정값으로 읽어도 되는가**를 정하는 값이다.
@@ -331,10 +327,10 @@ interface Scene {
     /** 카메라: 좌측 기준 위치(m)와 가시 구간(m) */
     camX: number;
     span: number;
-    /** v(t) 프로파일 — 차량별 속도 이력(차량 i 의 k번째 샘플 = prof[i*PROF_N+k]). */
-    prof: Float32Array;
-    profN: number;
-    profAcc: number;
+    /** 시공도 — 선두차 기준 상대 위치 이력(차량 i 의 k번째 샘플 = rel[i*PROF_N+k], m). */
+    rel: Float32Array;
+    relN: number;
+    relAcc: number;
   };
   ring?: {
     avCount: number;
@@ -346,15 +342,18 @@ interface Scene {
     sampleAcc: number;
     /** 감쇠율이 확정된 시각(s). 아직이면 NaN. */
     settledAt: number;
-    /** 시공간도 — 픽셀을 직접 쓰는 이미지와 그것을 올려 둔 오프스크린 캔버스. */
-    img: ImageData | null;
+    /* 시공도 이력 — **원자료 그대로**다(위치 m · 속도 버킷). 열 = 0.25초,
+       색인 = 열 × 대수 + 차량 id. 배열 순서는 링에서 회전하므로 id 로 색인한다. */
+    hx: Float32Array;
+    hb: Uint8Array;
+    /** 지금까지 적은 열의 총 개수. 최근 ST_COLS 개만 살아 있다. */
+    seq: number;
+    /** 궤적을 구워 둔 오프스크린(플롯 크기, CSS px)과 거기 이미 그린 열까지의 seq. */
     cv: HTMLCanvasElement | null;
     cvx: CanvasRenderingContext2D | null;
-    /** 다음에 덮어쓸 열 = 가장 오래된 열(링 버퍼의 머리). */
-    col: number;
-    dirty: boolean;
-    /** 직전 열에서 그 차가 있던 행(차량 id 로 색인). 궤적을 이어 그리는 데 쓴다. */
-    prow: Int16Array;
+    cvW: number;
+    cvH: number;
+    painted: number;
   };
   dispatch?: {
     net: Net;
@@ -382,9 +381,10 @@ function buildPlatoon(mode: PlatoonMode, lastAmp = Number.NaN): Scene {
     () => ({ kind, params: p }),
     v0,
   );
-  // 프로파일의 0번 샘플은 t=0 의 속도다 — 곡선이 축의 왼쪽 끝에서 시작한다.
-  const prof = new Float32Array(PLATOON.count * PROF_N);
-  for (let i = 0; i < vehicles.length; i++) prof[i * PROF_N] = vehicles[i]!.v;
+  // 0번 샘플은 t=0 의 자리다 — 궤적이 축의 왼쪽 끝에서 시작한다.
+  const rel = new Float32Array(PLATOON.count * PROF_N);
+  const lead0 = vehicles[vehicles.length - 1]!.x;
+  for (let i = 0; i < vehicles.length; i++) rel[i * PROF_N] = vehicles[i]!.x - lead0;
   return {
     scenario: 'platoon',
     vehicles,
@@ -404,9 +404,9 @@ function buildPlatoon(mode: PlatoonMode, lastAmp = Number.NaN): Scene {
       lastAmp,
       camX: Number.NaN,
       span: Number.NaN,
-      prof,
-      profN: 1,
-      profAcc: 0,
+      rel,
+      relN: 1,
+      relAcc: 0,
     },
   };
 }
@@ -444,13 +444,15 @@ function stepPlatoon(sc: Scene, dt: number): Scene {
   }
   if (!quiet) st.lastBrakeT = sc.t;
 
-  /* v(t) 프로파일 — 0.25s 마다 전 차량의 속도를 그대로 적는다. 파생 지표가 아니라
-     원자료다. 사이클이 끝나면 씬과 함께 새로 시작한다(그림도 다시 그려진다). */
-  st.profAcc += dt;
-  if (st.profAcc >= PROF_STEP && st.profN < PROF_N) {
-    st.profAcc -= PROF_STEP;
-    for (let i = 0; i <= last; i++) st.prof[i * PROF_N + st.profN] = sc.vehicles[i]!.v;
-    st.profN++;
+  /* 시공도 — 0.25s 마다 전 차량의 **선두차 기준 위치**를 그대로 적는다. 파생 지표가
+     아니라 원자료(위치)다. 창(30s)을 채우면 그림이 완성된 채로 서 있다가, 사이클이
+     끝나면 씬과 함께 처음부터 다시 그린다. */
+  st.relAcc += dt;
+  if (st.relAcc >= PROF_STEP && st.relN < PROF_N) {
+    st.relAcc -= PROF_STEP;
+    const lead = sc.vehicles[last]!.x;
+    for (let i = 0; i <= last; i++) st.rel[i * PROF_N + st.relN] = sc.vehicles[i]!.x - lead;
+    st.relN++;
   }
 
   /*
@@ -501,44 +503,24 @@ function applyAV(sc: Scene, k: number): void {
 }
 
 /**
- * 시공간도에 **열 하나**를 적는다. 한 열 = 0.25초, 한 행 = 링의 4m 구간.
+ * 시공도에 **열 하나**(0.25초)를 적는다 — 그리는 것이 아니라 **재는 것**이다.
  *
- * 링 버퍼라 가장 오래된 열을 덮어쓴다 — 지우고, 그 순간 22대가 있는 자리에
- * 제 속도색을 찍는다. 제어 AV 는 속도색 대신 `--fg` 라 궤적이 흰 선으로 남는다
- * (Stern et al. 의 그림에서 실험차를 따로 표시하는 것과 같은 자리다).
+ * 링 버퍼라 240열(60초)이 지나면 가장 오래된 열을 덮어쓴다. 적는 것은 원자료뿐이다:
+ * 링 위의 위치(m)와 속도 버킷. 제어 AV 는 255 로 표시해 궤적을 `--fg` 로 긋는다
+ * (Stern et al. 의 그림에서 실험차를 따로 표시하는 자리와 같다).
  */
 function sampleSpace(sc: Scene): void {
   const r = sc.ring;
-  if (!r?.img) return;
-  const d = r.img.data;
-  const col = r.col;
-  const pal = palette();
+  if (!r) return;
+  const n = RING.count;
+  const col = r.seq % ST_COLS;
   const C = sc.circumference ?? RING.length;
-
-  for (let row = 0; row < ST_ROWS; row++) d[(row * ST_COLS + col) * 4 + 3] = 0;
   for (const v of sc.vehicles) {
-    const k = ((v.x % C) + C) % C;
-    const row = Math.min(ST_ROWS - 1, Math.max(0, ST_ROWS - 1 - Math.floor((k / C) * ST_ROWS)));
-    const c = v.fs ? pal.fgRGB : pal.speedRGB[sIdx(v.v, V_REF.shockwave)]!;
-    /* 직전 열의 행까지 이어 칠한다 — 한 열 사이에 차가 여러 행을 지나가면
-       점만 찍었을 때 궤적이 **파선**으로 끊긴다. 링을 한 바퀴 돌아 0 을 넘어간
-       경우(행이 껑충 뛴다)는 잇지 않는다. 그 선은 실제로 화면 밖으로 나갔다. */
-    const prev = r.prow[v.id] ?? -1;
-    const gap = prev < 0 ? 0 : Math.abs(prev - row);
-    const from = gap > 0 && gap < ST_ROWS / 4 ? prev : row;
-    const lo = Math.min(from, row);
-    const hi = Math.max(from, row);
-    for (let y = lo; y <= hi; y++) {
-      const o = (y * ST_COLS + col) * 4;
-      d[o] = c[0];
-      d[o + 1] = c[1];
-      d[o + 2] = c[2];
-      d[o + 3] = 255;
-    }
-    r.prow[v.id] = row;
+    if (v.id >= n) continue;
+    r.hx[col * n + v.id] = ((v.x % C) + C) % C;
+    r.hb[col * n + v.id] = v.fs ? 255 : sIdx(v.v, V_REF.shockwave);
   }
-  r.col = (col + 1) % ST_COLS;
-  r.dirty = true;
+  r.seq++;
 }
 
 function buildRing(avCount: number): Scene {
@@ -567,12 +549,14 @@ function buildRing(avCount: number): Scene {
       filled: 0,
       sampleAcc: 0,
       settledAt: Number.NaN,
-      img: typeof ImageData === 'undefined' ? null : new ImageData(ST_COLS, ST_ROWS),
+      hx: new Float32Array(ST_COLS * RING.count),
+      hb: new Uint8Array(ST_COLS * RING.count),
+      seq: 0,
       cv: null,
       cvx: null,
-      col: 0,
-      dirty: true,
-      prow: new Int16Array(RING.count).fill(-1),
+      cvW: 0,
+      cvH: 0,
+      painted: 0,
     },
   };
 
@@ -1321,15 +1305,40 @@ const brakeOf = (v: Vehicle, pal: Palette): string | null => (v.a < -0.9 ? pal.b
  * 시나리오별 렌더러
  * ------------------------------------------------------------------ */
 
+/** 축 — 왼쪽·아래 1px 실선 + 4px 눈금 틱. **격자는 없다.** 숫자는 HTML 이 얹는다. */
+function axes(
+  ctx: CanvasRenderingContext2D,
+  r: PlotRect,
+  pal: Palette,
+  ax: { x: Axis; y: Axis },
+): void {
+  ctx.fillStyle = pal.line;
+  line(ctx, r.x0, r.y0, r.x0, r.y1);
+  line(ctx, r.x0, r.y1, r.x1, r.y1);
+  ctx.fillStyle = pal.hot;
+  for (const t of ax.x.ticks) {
+    ctx.fillRect(Math.round(r.x0 + frac(t, ax.x) * (r.x1 - r.x0)), Math.round(r.y1) + 1, 1, 4);
+  }
+  for (const t of ax.y.ticks) {
+    ctx.fillRect(Math.round(r.x0) - 5, Math.round(r.y1 - frac(t, ax.y) * (r.y1 - r.y0)), 4, 1);
+  }
+}
+
 /**
- * 01 · 직선 플래툰 — 위는 평면도, 아래는 **속도 프로파일 v(t)**.
+ * 01 · 직선 플래툰 — 위는 평면도, 아래는 **시공도**.
  *
- * string stability 논문의 표준 그림이다: 한 주기 동안 12대의 속도 곡선을 겹쳐
- * 그리면 사람·상용 ACC 는 뒤로 갈수록 골이 깊어지고(증폭), 제어 AV 는 얕아진다.
- * 이전 판의 세로 막대 12개는 같은 값을 그렸지만 **이퀄라이저**로 읽혔다 —
- * 시간축이 없으면 그것은 도표가 아니라 장식이다.
+ * 12대의 궤적을 **선두차 기준 좌표계**에서 그린다. 줄 사이의 세로 간격이 곧 차간
+ * 거리라, 선두가 밟은 뒤 간격이 뒤로 가며 크게 출렁이면(사람·상용 ACC) 스트링
+ * 불안정이고, 잦아들면(제어 AV) 안정이다. 왜 `x − v₀t` 가 아닌지는 `plot.ts` 참조.
  */
-function drawPlatoon(ctx: CanvasRenderingContext2D, W: number, H: number, sc: Scene, pal: Palette) {
+function drawPlatoon(
+  ctx: CanvasRenderingContext2D,
+  W: number,
+  H: number,
+  sc: Scene,
+  pal: Palette,
+  rect: PlotRect | null,
+) {
   const st = sc.platoon!;
   const vs = sc.vehicles;
   const rear = vs[0]!.x;
@@ -1347,8 +1356,7 @@ function drawPlatoon(ctx: CanvasRenderingContext2D, W: number, H: number, sc: Sc
   const scale = (W - PAD * 2) / st.span;
   const toX = (x: number) => PAD + (x - st.camX) * scale;
 
-  const plot = H >= 150;
-  const yRoad = Math.round(plot ? H * 0.22 : H * 0.5);
+  const yRoad = Math.round(rect ? H * SCENE.road * 0.54 : H * 0.5);
   const laneHalf = Math.max(3, Math.min(16, (LANE_W / 2) * scale));
 
   /* --- 평면도 ------------------------------------------------------
@@ -1379,39 +1387,30 @@ function drawPlatoon(ctx: CanvasRenderingContext2D, W: number, H: number, sc: Sc
     car(ctx, px, yRoad, 0, carLen, carWid, pal.speed[sIdx(v.v, vRef)]!, brakeOf(v, pal), null);
   }
 
-  if (!plot) return;
+  /* --- 시공도 ------------------------------------------------------- */
+  const ax = AXIS.platoon;
+  if (!rect || !ax) return;
+  axes(ctx, rect, pal, ax);
 
-  /* --- v(t) 프로파일 ------------------------------------------------ */
-  const pTop = Math.round(yRoad + laneHalf + 24);
-  const pBot = H - PAD - 5;
-  const ax = PAD + 8;
-  const x1 = W - PAD;
-  if (pBot - pTop < 30) return;
-  const tOf = (s: number) => ax + (s / PLATOON.cycle) * (x1 - ax);
-  const vOf = (v: number) => pBot - Math.min(1, Math.max(0, v / PROF_FS)) * (pBot - pTop);
+  const tOf = (s: number) => rect.x0 + frac(s, ax.x) * (rect.x1 - rect.x0);
+  const yOf = (m: number) =>
+    rect.y1 - Math.min(1, Math.max(0, frac(m, ax.y))) * (rect.y1 - rect.y0);
 
-  ctx.fillStyle = pal.line;
-  line(ctx, ax, pTop, ax, pBot);
-  line(ctx, ax, pBot, x1, pBot);
-  ctx.fillStyle = pal.hot;
-  for (let k = 0; k <= 60; k += 20) ctx.fillRect(ax - 4, Math.round(vOf(k / 3.6)), 4, 1);
-  for (let s = 0; s <= PLATOON.cycle; s += 10) ctx.fillRect(Math.round(tOf(s)), pBot + 1, 1, 4);
-
-  // 교란이 시작되는 순간 — 선두가 밟는다. 곡선의 골은 전부 이 선 오른쪽에서 생긴다.
+  // 교란이 시작되는 순간 — 선두가 밟는다. 궤적의 출렁임은 전부 이 선 오른쪽에서 난다.
   ctx.fillStyle = pal.brakeDim;
-  line(ctx, tOf(PLATOON.perturb.at), pTop, tOf(PLATOON.perturb.at), pBot);
+  line(ctx, tOf(PLATOON.perturb.at), rect.y0, tOf(PLATOON.perturb.at), rect.y1);
 
-  /* 궤적 — 선두(마지막 인덱스)가 가장 흐리고 후미(0)가 가장 밝다. 증폭은
-     "뒤로 갈수록 골이 깊어지는 것"이므로 읽어야 할 쪽을 세운다. */
-  const n = st.profN;
-  const prof = st.prof;
+  /* 궤적 — 선두가 가장 흐리고 후미로 갈수록 밝다. 증폭은 "뒤로 갈수록 출렁임이
+     커지는 것"이므로 읽어야 할 쪽을 세운다. 후미(0)를 마지막에 그려 위에 올린다. */
+  const n = st.relN;
+  const rel = st.rel;
   for (let i = vs.length - 1; i >= 0; i--) {
     ctx.fillStyle = pal.trace[Math.min(pal.trace.length - 1, i)]!;
     let px = tOf(0);
-    let py = vOf(prof[i * PROF_N]!);
+    let py = yOf(rel[i * PROF_N]!);
     for (let k = 1; k < n; k++) {
       const qx = tOf(k * PROF_STEP);
-      const qy = vOf(prof[i * PROF_N + k]!);
+      const qy = yOf(rel[i * PROF_N + k]!);
       line(ctx, px, py, qx, qy);
       px = qx;
       py = qy;
@@ -1419,38 +1418,82 @@ function drawPlatoon(ctx: CanvasRenderingContext2D, W: number, H: number, sc: Sc
   }
 }
 
-/** 시공간도의 오프스크린 캔버스는 처음 그릴 때 만든다(SSR·테스트에는 document 가 없다). */
-function spaceCanvas(r: NonNullable<Scene['ring']>): HTMLCanvasElement | null {
-  if (r.cv || !r.img || typeof document === 'undefined') return r.cv;
-  const c = document.createElement('canvas');
-  c.width = ST_COLS;
-  c.height = ST_ROWS;
-  r.cv = c;
-  r.cvx = c.getContext('2d');
-  r.dirty = true;
-  return c;
+/** 궤적을 굽는 오프스크린. 플롯 크기(CSS px)와 같아야 1:1 로 옮겨진다. */
+function ensureTrace(
+  r: NonNullable<Scene['ring']>,
+  pw: number,
+  ph: number,
+): HTMLCanvasElement | null {
+  if (typeof document === 'undefined') return null;
+  if (!r.cv) {
+    r.cv = document.createElement('canvas');
+    r.cvx = r.cv.getContext('2d');
+  }
+  if (r.cvW !== pw || r.cvH !== ph) {
+    r.cv.width = pw;
+    r.cv.height = ph;
+    r.cvW = pw;
+    r.cvH = ph;
+    // 크기가 바뀌면 버퍼가 비워진다 — 이력에서 통째로 다시 굽는다.
+    r.painted = 0;
+  }
+  return r.cv;
 }
 
 /**
- * 02 · 링 — 왼쪽은 조감 평면도, 오른쪽은 **시공간도**.
+ * 시공도의 한 열(0.25초 구간)을 굽는다.
  *
- * 시공간도는 가로 60초 × 세로 링 400 m 이고, 점의 색은 그 순간 그 차의 속도다.
- * 정체 파동은 **뒤(위-왼쪽)로 밀려가는 붉은 띠**로 나타나고, AV 를 넣으면 띠가
- * 사라진다 — Sugiyama(2008)·Stern et al.(2018) 링 실험 논문의 바로 그 그림이다.
- * 앞 판의 "속도 편차 시계열"은 원자료가 아니라 파생 지표라 장면과 이어지지 않았다.
+ * 열 하나가 **그 구간의 선분 22개**를 통째로 담으므로, 매 프레임 60초 × 22대를
+ * 다시 그릴 일이 없다 — 새 샘플이 들어온 열만 지우고 다시 굽는다(초당 4~6회).
+ * 링을 한 바퀴 돌아 0 으로 되돌아간 자리는 **잇지 않는다**(세로로 화면을 가로지른다).
  */
-function drawRing(ctx: CanvasRenderingContext2D, W: number, H: number, sc: Scene, pal: Palette) {
+function paintCol(
+  g: CanvasRenderingContext2D,
+  r: NonNullable<Scene['ring']>,
+  sq: number,
+  pal: Palette,
+  pw: number,
+  ph: number,
+  C: number,
+): void {
+  const n = RING.count;
+  const cw = pw / ST_COLS;
+  const i = sq % ST_COLS;
+  const j = (sq - 1 + ST_COLS) % ST_COLS;
+  const xa = i * cw;
+  const xb = xa + cw;
+  g.clearRect(Math.floor(xa), 0, Math.ceil(xb) - Math.floor(xa), ph);
+  for (let k = 0; k < n; k++) {
+    const a = r.hx[j * n + k]!;
+    const b = r.hx[i * n + k]!;
+    if (Math.abs(b - a) > C / 2) continue; // 링을 넘어간 자리는 끊는다
+    const bucket = r.hb[i * n + k]!;
+    g.fillStyle = bucket === 255 ? pal.fg : pal.speed[Math.min(SPEED_N - 1, bucket)]!;
+    line(g, xa, ph - (a / C) * ph, xb, ph - (b / C) * ph);
+  }
+}
+
+/**
+ * 02 · 링 — 왼쪽(좁으면 위)은 조감 평면도, 나머지는 **시공도**.
+ *
+ * 가로 60초 × 세로 링 400 m, 선의 색은 그 순간의 속도. 정체 파동은 **뒤로 밀려가는
+ * 붉은 띠**로 나타나고 AV 를 넣으면 사라진다 — Sugiyama(2008)·Stern et al.(2018)
+ * 링 실험 논문의 바로 그 그림이다.
+ */
+function drawRing(
+  ctx: CanvasRenderingContext2D,
+  W: number,
+  H: number,
+  sc: Scene,
+  pal: Palette,
+  rect: PlotRect | null,
+) {
   const r = sc.ring!;
   const vs = sc.vehicles;
   const C = sc.circumference!;
-  /* 넓으면 링과 시공간도를 **나란히**, 좁고 캔버스가 넉넉하면 **세로로 쌓는다**
-     (위에 작은 링 · 아래는 폭을 다 쓰는 시공간도). 둘 다 안 되면(홈 패널 176px)
-     장면만 그린다 — 도표를 80px 안에 우겨 넣으면 한 줄이 1px 도 안 돼서 궤적이
-     아니라 얼룩이 된다. */
-  const wide = W >= 520;
-  const stack = !wide && H >= 230;
-  const ringW = wide ? Math.round(W * 0.34) : W;
-  const ringH = stack ? Math.round(H * 0.44) : H;
+  const wide = W >= WIDE_MIN;
+  const ringW = wide ? Math.round(W * SCENE.ringWide) : W;
+  const ringH = rect && !wide ? Math.round(H * SCENE.ringStack) : H;
 
   const cx = ringW / 2;
   const cy = ringH / 2;
@@ -1482,42 +1525,28 @@ function drawRing(ctx: CanvasRenderingContext2D, W: number, H: number, sc: Scene
     );
   }
 
-  if (!wide && !stack) return;
+  /* --- 시공도 ------------------------------------------------------- */
+  const ax = AXIS.shockwave;
+  if (!rect || !ax) return;
+  axes(ctx, rect, pal, ax);
 
-  /* --- 시공간도 ----------------------------------------------------- */
-  const x0 = wide ? ringW + 24 : PAD + 10;
-  const x1 = W - PAD;
-  const y0 = wide ? PAD : ringH + 6;
-  const y1 = H - PAD - 5;
-  if (x1 - x0 < 60 || y1 - y0 < 40) return;
+  const pw = Math.max(8, Math.round(rect.x1 - rect.x0));
+  const ph = Math.max(8, Math.round(rect.y1 - rect.y0));
+  const cv = ensureTrace(r, pw, ph);
+  if (!cv || !r.cvx) return;
 
-  // 축 — 세로는 링 위의 위치(100 m 마다), 가로는 시간(10초 마다).
-  ctx.fillStyle = pal.line;
-  line(ctx, x0 - 5, y0, x0 - 5, y1);
-  line(ctx, x0 - 5, y1, x1, y1);
-  ctx.fillStyle = pal.hot;
-  for (let m = 0; m <= C; m += 100) {
-    ctx.fillRect(x0 - 9, Math.round(y1 - (m / C) * (y1 - y0)), 4, 1);
-  }
-  for (let t = 0; t <= ST_SPAN; t += 10) {
-    ctx.fillRect(Math.round(x0 + (t / ST_SPAN) * (x1 - x0)), y1 + 1, 1, 4);
-  }
+  // 새로 들어온 열만 굽는다. 크기가 바뀌었으면 `painted` 가 0 이라 창 전체를 다시 굽는다.
+  const from = Math.max(r.painted, r.seq - ST_COLS + 1, 1);
+  for (let sq = from; sq < r.seq; sq++) paintCol(r.cvx, r, sq, pal, pw, ph, C);
+  r.painted = r.seq;
 
-  const cv = spaceCanvas(r);
-  if (!cv || !r.cvx || !r.img) return;
-  if (r.dirty) {
-    r.cvx.putImageData(r.img, 0, 0);
-    r.dirty = false;
-  }
-  /* 링 버퍼를 **두 조각**으로 옮긴다: 가장 오래된 열(col)부터 끝까지가 왼쪽,
-     0..col 이 오른쪽. 매 프레임 60초 × 22대를 다시 찍지 않는다(drawImage 2회). */
-  const smooth = ctx.imageSmoothingEnabled;
-  ctx.imageSmoothingEnabled = false;
-  const head = r.col;
-  const w1 = Math.round(((ST_COLS - head) / ST_COLS) * (x1 - x0));
-  ctx.drawImage(cv, head, 0, ST_COLS - head, ST_ROWS, x0, y0, w1, y1 - y0);
-  if (head > 0) ctx.drawImage(cv, 0, 0, head, ST_ROWS, x0 + w1, y0, x1 - x0 - w1, y1 - y0);
-  ctx.imageSmoothingEnabled = smooth;
+  /* 링 버퍼를 **두 조각**으로 옮긴다: 가장 오래된 열부터 끝까지가 왼쪽, 나머지가
+     오른쪽(오른쪽 끝이 지금). 원본과 대상의 폭이 같아 1:1 이라 다시 표본되지 않는다. */
+  const cut = Math.round(((r.seq % ST_COLS) / ST_COLS) * pw);
+  const x0 = Math.round(rect.x0);
+  const y0 = Math.round(rect.y0);
+  if (cut < pw) ctx.drawImage(cv, cut, 0, pw - cut, ph, x0, y0, pw - cut, ph);
+  if (cut > 0) ctx.drawImage(cv, 0, 0, cut, ph, x0 + pw - cut, y0, cut, ph);
 }
 
 /**
@@ -1835,6 +1864,34 @@ interface SimCanvas extends HTMLCanvasElement {
   simProbe?: { ms: number; max: number };
 }
 
+/**
+ * 플롯 영역을 캔버스의 부모(`<figure>`)에 CSS 변수로 내보낸다.
+ *
+ * 눈금 숫자는 HTML 이고 그림은 캔버스라, 둘이 같은 좌표를 봐야 한다. **프레임마다
+ * 쓰지 않는다** — 값이 바뀔 때만(즉 리사이즈 때만) 건드린다. `data-plot` 은 CSS 가
+ * "이제 좌표가 있다"를 아는 표식이다. 하이드레이션 전에는 라벨이 서지 않는다.
+ */
+function syncPlot(
+  canvas: HTMLCanvasElement | null,
+  rect: PlotRect | null,
+  keyRef: { current: string },
+): void {
+  const host = canvas?.parentElement;
+  if (!host) return;
+  const key = rect ? `${rect.x0}|${rect.y0}|${rect.x1}|${rect.y1}` : '';
+  if (keyRef.current === key) return;
+  keyRef.current = key;
+  if (!rect) {
+    host.removeAttribute('data-plot');
+    return;
+  }
+  host.style.setProperty('--plot-x0', `${rect.x0}px`);
+  host.style.setProperty('--plot-y0', `${rect.y0}px`);
+  host.style.setProperty('--plot-x1', `${rect.x1}px`);
+  host.style.setProperty('--plot-y1', `${rect.y1}px`);
+  host.setAttribute('data-plot', '');
+}
+
 
 export function useTrafficSim(
   canvasRef: RefObject<HTMLCanvasElement | null>,
@@ -1847,6 +1904,7 @@ export function useTrafficSim(
   const reducedRef = useRef(reducedMotion);
   reducedRef.current = reducedMotion;
   const emitRef = useRef(0);
+  const plotKeyRef = useRef('');
 
   const view = useCanvas2D(canvasRef, {
     maxDpr: 2,
@@ -1910,8 +1968,13 @@ export function useTrafficSim(
     ctx.fillStyle = pal.bg;
     ctx.fillRect(0, 0, W, H);
 
-    if (sc.scenario === 'platoon') drawPlatoon(ctx, W, H, sc, pal);
-    else if (sc.scenario === 'shockwave') drawRing(ctx, W, H, sc, pal);
+    /* 도표가 앉는 사각형은 `plot.ts` 하나가 정한다 — 같은 값을 `<figure>` 의 CSS
+       변수로도 내보내, 캔버스 위에 얹힌 눈금 숫자가 축과 정확히 맞는다. */
+    const rect = plotRect(sc.scenario, W, H);
+    syncPlot(canvasRef.current, rect, plotKeyRef);
+
+    if (sc.scenario === 'platoon') drawPlatoon(ctx, W, H, sc, pal, rect);
+    else if (sc.scenario === 'shockwave') drawRing(ctx, W, H, sc, pal, rect);
     else if (sc.scenario === 'dispatch') drawDispatch(ctx, W, H, sc, pal);
     else drawV2V(ctx, W, H, sc, pal);
 
