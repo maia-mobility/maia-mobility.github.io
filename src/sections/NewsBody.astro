@@ -20,6 +20,8 @@
  *
  * 글은 전부 `src/data/news.ts` 의 것이다.
  */
+import DotPortrait from '../components/DotPortrait';
+import { GALLERY } from '../data/gallery';
 import { NEWS } from '../data/news';
 import { pick, type Lang } from '../i18n';
 import { UI } from '../i18n/ui';
@@ -71,7 +73,96 @@ const YEARS = NEWS.reduce<{ year: string; items: typeof NEWS }[]>((acc, n) => {
       </section>
     ))
   }
+
+  {
+    GALLERY.map((ev) => (
+      <section class="gallery" data-quiet data-pager>
+        <header class="gHead">
+          <h2 class="gTitle">{t(ev.title)}</h2>
+          <div class="gNav">
+            <span class="gCount" data-pager-count aria-live="polite">
+              01 / {String(ev.photos.length).padStart(2, '0')}
+            </span>
+            <button type="button" class="ctrl" data-pager-prev aria-label={String(t(UI.prevPhoto))}>
+              <span aria-hidden="true">◂</span>
+            </button>
+            <button type="button" class="ctrl" data-pager-next aria-label={String(t(UI.nextPhoto))}>
+              <span aria-hidden="true">▸</span>
+            </button>
+          </div>
+        </header>
+
+        <ul class="track" data-pager-track tabindex="0" aria-label={String(t(ev.title))}>
+          {ev.photos.map((p) => (
+            <li class="slide" style={`--r:${p.width / p.height}`}>
+              <figure>
+                <DotPortrait
+                  src={p.src}
+                  alt={t(p.alt)}
+                  label={p.id}
+                  width={p.width}
+                  height={p.height}
+                  duration={1}
+                />
+                <figcaption class="cap">{t(p.caption)}</figcaption>
+              </figure>
+            </li>
+          ))}
+        </ul>
+      </section>
+    ))
+  }
 </div>
+
+<script>
+  import { mountAllDotPortraits } from '../lib/dotPortrait';
+  mountAllDotPortraits();
+
+  /* 가로 페이저 — 스크롤 스냅이 일을 하고, 여기서는 쪽수 표기와 버튼만 맡는다. */
+  const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  document.querySelectorAll<HTMLElement>('[data-pager]').forEach((root) => {
+    const track = root.querySelector<HTMLElement>('[data-pager-track]')!;
+    const slides = [...track.children] as HTMLElement[];
+    const count = root.querySelector<HTMLElement>('[data-pager-count]')!;
+    const prev = root.querySelector<HTMLButtonElement>('[data-pager-prev]')!;
+    const next = root.querySelector<HTMLButtonElement>('[data-pager-next]')!;
+    const pad = (n: number) => String(n).padStart(2, '0');
+
+    /* 트랙 왼쪽 가장자리에 가장 가까운 슬라이드 */
+    const current = () => {
+      const x = track.scrollLeft;
+      /* 끝까지 밀리면 마지막 장 — 마지막 슬라이드는 왼쪽 선에 못 닿고 멈춘다. */
+      if (x + track.clientWidth >= track.scrollWidth - 2) return slides.length - 1;
+      let best = 0;
+      slides.forEach((s, i) => {
+        if (Math.abs(s.offsetLeft - track.offsetLeft - x) < Math.abs(slides[best].offsetLeft - track.offsetLeft - x)) best = i;
+      });
+      return best;
+    };
+    const sync = () => {
+      const i = current();
+      count.textContent = `${pad(i + 1)} / ${pad(slides.length)}`;
+      prev.disabled = i === 0;
+      next.disabled = track.scrollLeft + track.clientWidth >= track.scrollWidth - 2;
+    };
+    const go = (d: number) => {
+      const i = Math.min(slides.length - 1, Math.max(0, current() + d));
+      track.scrollTo({
+        left: slides[i].offsetLeft - track.offsetLeft,
+        behavior: reduced ? 'auto' : 'smooth',
+      });
+    };
+    prev.addEventListener('click', () => go(-1));
+    next.addEventListener('click', () => go(1));
+    track.addEventListener('scroll', sync, { passive: true });
+    track.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowLeft') { e.preventDefault(); go(-1); }
+      if (e.key === 'ArrowRight') { e.preventDefault(); go(1); }
+    });
+    addEventListener('resize', sync);
+    sync();
+  });
+</script>
 
 <style>
   .page {
@@ -169,6 +260,115 @@ const YEARS = NEWS.reduce<{ year: string; items: typeof NEWS }[]>((acc, n) => {
     line-height: var(--lh-body);
     color: var(--fg-mute);
     text-wrap: pretty;
+  }
+
+  /* ---- 현장 사진 -------------------------------------------------------
+     가로로 넘기는 페이저(iOS 의 페이지 전환처럼 한 장씩 스냅). 사진은 구성원
+     사진과 같은 어휘(점으로 해상 + 코너 틱)다. 다음 장이 오른쪽에 살짝 보여
+     넘길 수 있다는 것이 읽힌다. 구분은 점선 스캔 라인. */
+  .gallery {
+    display: grid;
+    gap: var(--space-5);
+    padding-block: var(--space-7) var(--space-8);
+    border-block-start: var(--hair) dotted var(--scan);
+  }
+  .gHead {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+  }
+  .gTitle {
+    margin: 0;
+    font-family: var(--font-sans);
+    font-size: var(--t-lg);
+    font-weight: var(--w-regular);
+    line-height: var(--lh-2);
+    letter-spacing: -0.015em;
+    color: var(--fg);
+  }
+  .gNav {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+  }
+  .gCount {
+    margin-inline-end: var(--space-2);
+    font-family: var(--font-mono);
+    font-size: var(--t-mono-sm);
+    letter-spacing: var(--track-mono-read);
+    color: var(--fg-mute);
+    font-variant-numeric: tabular-nums;
+  }
+  /* 버튼 어휘 — 사각 1px, 모노, hover 에서 테두리가 점등. */
+  .ctrl {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-block-size: var(--tap-min);
+    min-inline-size: var(--tap-min);
+    background: transparent;
+    border: var(--hair) solid var(--line);
+    font-family: var(--font-mono);
+    font-size: var(--t-mono-sm);
+    color: var(--fg-mute);
+    cursor: pointer;
+    transition:
+      border-color var(--dur-fast) var(--ease-out),
+      color var(--dur-fast) var(--ease-out);
+  }
+  .ctrl:hover:not(:disabled),
+  .ctrl:focus-visible {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+  .ctrl:disabled {
+    opacity: 0.35;
+    cursor: default;
+  }
+
+  .track {
+    --h: clamp(18rem, 62vh, 32rem);
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    gap: var(--space-5);
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x mandatory;
+    scrollbar-width: none;
+  }
+  .track::-webkit-scrollbar {
+    display: none;
+  }
+  .track:focus-visible {
+    outline: var(--hair) solid var(--accent);
+    outline-offset: 4px;
+  }
+  .slide {
+    flex: 0 0 auto;
+    /* 높이를 맞추고 폭은 사진 비율이 정한다. 좁은 화면에서는 화면 폭 안에서 다음 장이 비친다. */
+    inline-size: min(calc(var(--h) * var(--r)), 82vw);
+    scroll-snap-align: start;
+    scroll-snap-stop: always;
+  }
+  .slide figure {
+    margin: 0;
+    display: grid;
+    gap: var(--space-2);
+  }
+  /* DotPortrait 의 190px 상한을 이 구역에서만 푼다(People 의 .portrait 와 같은 방식). */
+  .slide :global([data-dot-wrap]) {
+    max-inline-size: 100%;
+  }
+  .cap {
+    font-family: var(--font-mono);
+    font-size: var(--t-mono-sm);
+    line-height: var(--lh-mono);
+    letter-spacing: var(--track-mono-read);
+    color: var(--fg-mute);
   }
 
   /* ---- 좁은 화면 ------------------------------------------------------ */

@@ -76,6 +76,8 @@ export const UI = {
   /** 연구 덱의 이전/다음 — 가로로 넘긴다는 것을 알려주는 유일한 장치다. */
   prevArea: { en: 'Previous area', ko: '이전 분야' },
   nextArea: { en: 'Next area', ko: '다음 분야' },
+  prevPhoto: { en: 'Previous photo', ko: '이전 사진' },
+  nextPhoto: { en: 'Next photo', ko: '다음 사진' },
 
   /** 홈의 요약 구역에서 전체 목록 페이지로 가는 링크. */
   seeAll: { en: 'See all', ko: '전체 보기' },

@@ -13,10 +13,22 @@ export interface NewsItem {
 /** 최신순. 새 소식은 맨 앞에 추가. */
 export const NEWS: NewsItem[] = [
   {
+    date: '2026-10-21',
+    kind: 'talk',
+    title: {
+      en: 'MAIA Lab took part in the ITS World Congress 2026 in Gangneung with a poster presentation and a panel discussion.',
+      ko: 'MAIA 연구실이 2026 강릉 ITS 세계총회에서 포스터 발표와 패널 토론에 참여했습니다.',
+    },
+    body: {
+      en: 'Poster: Proactive Decision Support through Multimodal Traffic Analysis and Physical AI Simulation.',
+      ko: '포스터: Proactive Decision Support through Multimodal Traffic Analysis and Physical AI Simulation.',
+    },
+  },
+  {
     date: '2026-08-25',
     kind: 'grant',
     title: {
-      en: 'Dr. Hwapyeong Yu has been selected for the Individual Basic Research Program funded by the National Research Foundation (NRF).',
+      en: 'Prof. Hwapyeong Yu has been selected for the Individual Basic Research Program funded by the National Research Foundation (NRF).',
       ko: '유화평 교수가 한국연구재단(NRF) 개인기초연구사업에 선정되었습니다.',
     },
     body: {
@@ -28,7 +40,7 @@ export const NEWS: NewsItem[] = [
     date: '2026-03-01',
     kind: 'lab',
     title: {
-      en: 'Dr. Hwapyeong Yu has joined Myongji University as an Assistant Professor in the Smart Mobility Engineering Major and has established the MAIA Lab.',
+      en: 'Prof. Hwapyeong Yu has joined Myongji University as an Assistant Professor in the Smart Mobility Engineering Major and has established the MAIA Lab.',
       ko: '유화평 교수가 명지대학교 스마트모빌리티공학전공 조교수로 부임하여 MAIA 연구실을 설립했습니다.',
     },
   },
