@@ -142,7 +142,7 @@ export const MEMBERS: Person[] = [
     name: { en: 'Choi Woojin', ko: '최우진' },
     latin: 'Choi, W.',
     role: UNDERGRAD,
-    photo: '/images/people/choi-woojin.jpg',
+    photo: '/images/people/choi-woojin-2.jpg',
     topics: [
       { en: 'Vision-language models (VLM)', ko: '비전-언어 모델(VLM)' },
       { en: 'Driving scene understanding', ko: '주행 장면 이해' },
